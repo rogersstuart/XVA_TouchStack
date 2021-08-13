@@ -32,6 +32,7 @@ enter_DefaultMode_from_RESET (void)
   PBCFG_0_enter_DefaultMode_from_RESET ();
   LFOSC_0_enter_DefaultMode_from_RESET ();
   CIP51_0_enter_DefaultMode_from_RESET ();
+  RSTSRC_0_enter_DefaultMode_from_RESET ();
   CLOCK_0_enter_DefaultMode_from_RESET ();
   TIMER01_0_enter_DefaultMode_from_RESET ();
   TIMER16_2_enter_DefaultMode_from_RESET ();
@@ -69,12 +70,24 @@ WDT_0_enter_DefaultMode_from_RESET (void)
       NOP ();
     }
 
-  // Disable WDT
+  // Disable WDT before changing interval
   ea = IE_EA;
   IE_EA = 0;
   WDTCN = 0xDE;
   WDTCN = 0xAD;
   IE_EA = ea;
+
+  // Delay 2 LFO cycles to ensure WDT is completely disabled
+  for (i = 0; i < (2 * 3062500UL) / (80000 * 3); i++)
+    {
+      NOP ();
+    }
+
+  // Change WDT interval
+  WDTCN = 5;
+
+  // Start WDT
+  WDTCN = 0xA5;
 
   // [WDTCN_2 - Watchdog Timer Control]$
 
@@ -85,23 +98,23 @@ PORTS_0_enter_DefaultMode_from_RESET (void)
 {
   // $[P0 - Port 0 Pin Latch]
   /***********************************************************************
-   - P0.0 is low. Set P0.0 to drive low
+   - P0.0 is high. Set P0.0 to drive or float high
    - P0.1 is low. Set P0.1 to drive low
-   - P0.2 is low. Set P0.2 to drive low
+   - P0.2 is high. Set P0.2 to drive or float high
    - P0.3 is low. Set P0.3 to drive low
    - P0.4 is high. Set P0.4 to drive or float high
    - P0.5 is high. Set P0.5 to drive or float high
    - P0.6 is high. Set P0.6 to drive or float high
    - P0.7 is low. Set P0.7 to drive low
    ***********************************************************************/
-  P0 = P0_B0__LOW | P0_B1__LOW | P0_B2__LOW | P0_B3__LOW | P0_B4__HIGH
+  P0 = P0_B0__HIGH | P0_B1__LOW | P0_B2__HIGH | P0_B3__LOW | P0_B4__HIGH
       | P0_B5__HIGH | P0_B6__HIGH | P0_B7__LOW;
   // [P0 - Port 0 Pin Latch]$
 
   // $[P0MDOUT - Port 0 Output Mode]
   /***********************************************************************
    - P0.0 output is open-drain
-   - P0.1 output is open-drain
+   - P0.1 output is push-pull
    - P0.2 output is open-drain
    - P0.3 output is push-pull
    - P0.4 output is push-pull
@@ -109,13 +122,26 @@ PORTS_0_enter_DefaultMode_from_RESET (void)
    - P0.6 output is open-drain
    - P0.7 output is open-drain
    ***********************************************************************/
-  P0MDOUT = P0MDOUT_B0__OPEN_DRAIN | P0MDOUT_B1__OPEN_DRAIN
+  P0MDOUT = P0MDOUT_B0__OPEN_DRAIN | P0MDOUT_B1__PUSH_PULL
       | P0MDOUT_B2__OPEN_DRAIN | P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL
       | P0MDOUT_B5__OPEN_DRAIN | P0MDOUT_B6__OPEN_DRAIN
       | P0MDOUT_B7__OPEN_DRAIN;
   // [P0MDOUT - Port 0 Output Mode]$
 
   // $[P0MDIN - Port 0 Input Mode]
+  /***********************************************************************
+   - P0.0 pin is configured for digital mode
+   - P0.1 pin is configured for digital mode
+   - P0.2 pin is configured for analog mode
+   - P0.3 pin is configured for digital mode
+   - P0.4 pin is configured for digital mode
+   - P0.5 pin is configured for digital mode
+   - P0.6 pin is configured for digital mode
+   - P0.7 pin is configured for digital mode
+   ***********************************************************************/
+  P0MDIN = P0MDIN_B0__DIGITAL | P0MDIN_B1__DIGITAL | P0MDIN_B2__ANALOG
+      | P0MDIN_B3__DIGITAL | P0MDIN_B4__DIGITAL | P0MDIN_B5__DIGITAL
+      | P0MDIN_B6__DIGITAL | P0MDIN_B7__DIGITAL;
   // [P0MDIN - Port 0 Input Mode]$
 
   // $[P0SKIP - Port 0 Skip]
@@ -394,7 +420,6 @@ CLOCK_0_enter_DefaultMode_from_RESET (void)
 {
   // $[HFOSC1 Setup]
   // Ensure SYSCLK is > 24 MHz before switching to HFOSC1
-  SFRPAGE = 0x00;
   CLKSEL = CLKSEL_CLKSL__HFOSC0 | CLKSEL_CLKDIV__SYSCLK_DIV_1;
   while ((CLKSEL & CLKSEL_DIVRDY__BMASK) == CLKSEL_DIVRDY__NOT_READY)
     ;
@@ -693,6 +718,21 @@ PORTS_1_enter_DefaultMode_from_RESET (void)
 
   // $[P1MAT - Port 1 Match]
   // [P1MAT - Port 1 Match]$
+
+}
+
+extern void
+RSTSRC_0_enter_DefaultMode_from_RESET (void)
+{
+  // $[RSTSRC - Reset Source]
+  /***********************************************************************
+   - A power-on or supply monitor reset occurred
+   - A missing clock detector reset occurred
+   - A Comparator 0 reset did not occur
+   ***********************************************************************/
+  SFRPAGE = 0x00;
+  RSTSRC = RSTSRC_PORSF__SET | RSTSRC_MCDRSF__SET | RSTSRC_C0RSEF__NOT_SET;
+  // [RSTSRC - Reset Source]$
 
 }
 

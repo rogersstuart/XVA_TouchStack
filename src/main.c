@@ -9,12 +9,10 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
-#include <SI_EFM8BB3_Register_Enums.h>                  // SFR declarations
+#include <SI_EFM8BB3_Register_Enums.h> // SFR declarations
 #include "InitDevice.h"
 // $[Generated Includes]
 // [Generated Includes]$
-
-#define BAUDRATE 500000
 
 extern bool int_flag;
 extern bool tx_int_flag;
@@ -24,100 +22,102 @@ uint32_t touch_cal[4];
 char last_result[4];
 uint32_t touch_timer[4];
 char hold_ctr[4];
-char skip[4];
 
 char program_num = 0;
 
-uint32_t millis(){
+/**
+ *
+ */
+uint32_t millis()
+{
   uint32_t tmr_val = 0;
   IE_EA = 0; //disable interrupts
   tmr_val = ms_counter;
-  IE_EA = 1; //disable interrupts
+  IE_EA = 1; //enable interrupts
   return tmr_val;
 }
 
-void resetMsTmr(){
+/**
+ *
+ */
+void resetMsTmr()
+{
   IE_EA = 0; //disable interrupts
-    ms_counter = 0;
-    IE_EA = 1; //disable interrupts
+  ms_counter = 0;
+  IE_EA = 1; //enable interrupts
 }
 
-uint32_t
-touchTimer(char sensor_index){
+/**
+ *
+ */
+uint32_t touchTimer(char sensor_index)
+{
 
   uint32_t timer = 0;
   char result = 0;
 
-  P0_B7 = 1; //tx high
-
-  //wait until the rx pin is high
-
-  /*
-  while(!result){
-      timer++;
-  switch(sensor_index){
-    case 0: result = P1_B0; break;
-    case 1: result = P1_B1; break;
-    case 2: result = P1_B2; break;
-    case 3: result = P1_B3;
-  };}
-  */
-
-
-  P1 = 0xFF; //set all rx port pin high
+  P0_B7 = 1;      //tx high
+  P1 = 0xFF;      //set all rx port pin high
   P1MDOUT = 0xFF; //change rx port to push pull
-
-  //timer*=10;
-  //for(;timer > 0; timer--);
-
 
   //wait at least one ms
   int_flag = false;
-  while (!int_flag);
+  while (!int_flag)
+    ;
   int_flag = false;
-  while (!int_flag);
+  while (!int_flag)
+    ;
 
-
-  IE_EA = 0; //disable interrupts
+  IE_EA = 0;   //disable interrupts
   P1MDOUT = 0; //set rx port to open drain
 
   P0_B7 = 0; //set tx low
 
-  //begin testing sensor
-
+  /**
+ * begin testing sensor
+ */
 
   //wait until the rx pin is low
   result = true;
-  while(result){
+  while (result)
+  {
+    switch (sensor_index)
+    {
+    case 0:
+      result = P1_B0;
+      break;
+    case 1:
+      result = P1_B1;
+      break;
+    case 2:
+      result = P1_B2;
+      break;
+    case 3:
+      result = P1_B3;
+    };
 
-      timer++;
-  switch(sensor_index){
-    case 0: result = P1_B0; break;
-    case 1: result = P1_B1; break;
-    case 2: result = P1_B2; break;
-    case 3: result = P1_B3;
-  };}
+    timer++;
+  }
 
   IE_EA = 1; //enable interrupts
 
   return timer;
 }
 
-void calibrateTouch(){
-  int i = 0;
+void calibrateTouch()
+{
+  int i = 0, k = 0;
 
-  for(i = 0; i < 4; i++)
-    {
-      touch_cal[i] = touchTimer(i);
+  for (i = 0; i < 4; i++)
+  {
+    touch_cal[i] = touchTimer(i);
 
-      if(i == 1)
-        touch_cal[i] += (touch_cal[i]/10)*2;
-      else
-        touch_cal[i] += (touch_cal[i]/10)*8;
-    }
+    for(k = 1; k < 10; k++)
+      touch_cal[i] += touchTimer(i);
+
+    touch_cal[i] /= 10;
+  }
 }
-
-
 
 //-----------------------------------------------------------------------------
 // SiLabs_Startup() Routine
@@ -127,8 +127,7 @@ void calibrateTouch(){
 // useful place to disable the watchdog timer, which is enable by default
 // and may trigger before main() in some instances.
 //-----------------------------------------------------------------------------
-void
-SiLabs_Startup (void)
+void SiLabs_Startup(void)
 {
   // $[SiLabs Startup]
   // [SiLabs Startup]$
@@ -137,188 +136,222 @@ SiLabs_Startup (void)
 //-----------------------------------------------------------------------------
 // main() Routine
 // ----------------------------------------------------------------------------
-int
-main (void)
+int main(void)
 {
   int i = 0;
-  char result[4] = {0,0,0,0};
+  char result[4] = {0, 0, 0, 0};
   char flags_tmp = 0;
+  uint32_t tmp_tmr = 0;
+
+  WDTCN = 0xA5;
 
   // Call hardware initialization routine
-  enter_DefaultMode_from_RESET ();
+  enter_DefaultMode_from_RESET();
 
-//set the led brightness
+  //set the initial led brightness
+  PCA0CPH0 = 0xFF;
+  PCA0CPH1 = 0xFF;
+  PCA0CPH2 = 0xFF;
+  PCA0CPH3 = 0xFF;
+
+  resetMsTmr();
+
+  //turn the PWM channels on
+  PCA0CPM0 ^= (1 << 1);
+  PCA0CPM1 ^= (1 << 1);
+  PCA0CPM3 ^= (1 << 1);
+  PCA0CPM2 ^= (1 << 1);
+
+  //do a little startup brightness thing
+  for(i = 0xFF; i >= 0xE0; i--)
+  {
+    PCA0CPH0 = i;
+    PCA0CPH1 = i;
+    PCA0CPH2 = i;
+    PCA0CPH3 = i;
+
+    tmp_tmr = millis();
+    while(millis()-tmp_tmr < (2000/32))
+      WDTCN = 0xA5;
+  }
+
+  //set the led brightness
   PCA0CPH0 = 0xF2;
   PCA0CPH1 = 0xF2;
   PCA0CPH2 = 0xF2;
   PCA0CPH3 = 0xF2;
 
-  resetMsTmr();
-
-//turn the PWM channels on
-  while(millis() < 1000);
-  PCA0CPM0 ^= (1<<1);
-  while(millis() < 2000);
-  PCA0CPM1 ^= (1<<1);
-  while(millis() < 3000);
-  PCA0CPM3 ^= (1<<1);
-  while(millis() < 4000);
-  PCA0CPM2 ^= (1<<1);
-  while(millis() < 5000);
-
   calibrateTouch();
 
-  //turn the channels off
-    PCA0CPM0 ^= (1<<1);
-    PCA0CPM1 ^= (1<<1);
-    PCA0CPM3 ^= (1<<1);
-    PCA0CPM2 ^= (1<<1);
+  WDTCN = 0xA5;
 
-    //set program to 0
-    tx_int_flag = false;
-    SBUF0 = 'r';
-    while(!tx_int_flag);
-    tx_int_flag = false;
-    SBUF0 = 0;
-    while(!tx_int_flag);
+  //turn the channels off
+  PCA0CPM0 ^= (1 << 1);
+  PCA0CPM1 ^= (1 << 1);
+  PCA0CPM3 ^= (1 << 1);
+  PCA0CPM2 ^= (1 << 1);
+
+  //set program to 0
+  tx_int_flag = false;
+  SBUF0 = 'r';
+  while (!tx_int_flag)
+    ;
+  tx_int_flag = false;
+  SBUF0 = 0;
+  while (!tx_int_flag)
+    ;
 
   while (1)
+  {
+
+     WDTCN = 0xA5;
+
+    //gather touch results
+    for (i = 0; i < 4; i++)
+      result[i] = (touchTimer(i) > touch_cal[i]); //1 touched, 0 no touch
+
+    for (i = 0; i < 4; i++)
     {
-      //P2_B3 = 1;
 
-      //gather touch results
-      for(i = 0; i < 4; i++)
-        result[i] = (touchTimer(i) > touch_cal[i]); //1 touched, 0 no touch
+      if (((result[i] == last_result[i]) && hold_ctr[i] == 0) || (millis() - touch_timer[i]) < 250)
+        continue;
+      else
+      {
+        touch_timer[i] = millis();
 
-      for(i = 0; i < 4; i++)
+        if (result[i])
         {
-
-
-        if(((result[i] == last_result[i]) && hold_ctr[i] == 0) || (millis()-touch_timer[i]) < 250)
-          continue;
-        else
+          if (i == 0) //button 0
           {
-            touch_timer[i] = millis();
+            tx_int_flag = false;
+            SBUF0 = 'r';
+            while (!tx_int_flag)
+              ;
+            if (program_num == 0)
+              program_num = 127;
+            else
+              program_num--;
 
-            if(result[i])
-              {
-                if(i == 0)
-                {
-
-                    tx_int_flag = false;
-                    SBUF0 = 'r';
-                    while(!tx_int_flag);
-                    if(program_num == 0)
-                      program_num = 127;
-                    else
-                      program_num--;
-
-                    if(result[0])
-                    {
-                    program_num = 0;
-                    //skip[1] = true;
-                    }
-
-                    tx_int_flag = false;
-                    SBUF0 = program_num;
-                    while(!tx_int_flag);
-                }
-                else
-                  if(i == 1)
-                    {
-                      tx_int_flag = false;
-                      SBUF0 = 'r';
-                      while(!tx_int_flag);
-                      if(program_num == 127)
-                        program_num = 0;
-                      else
-                        program_num++;
-
-                      if(result[1])
-                        {
-                        program_num = 0;
-                        //skip[1] = true;
-                        }
-
-                      tx_int_flag = false;
-                      SBUF0 = program_num;
-                      while(!tx_int_flag);
-                    }
-                  else
-                  if(i ==2)
-                    {
-                      tx_int_flag = false;
-                      SBUF0 = 'w';
-                      while(!tx_int_flag);
-                      if(program_num == 127)
-                        program_num = 0;
-                      else
-                        program_num++;
-                      tx_int_flag = false;
-                      SBUF0 = program_num;
-                      while(!tx_int_flag);
-                    }
-                  else
-                if(i == 3)//
-                {
-                  if(hold_ctr[i] > 10)
-                    P0_B3 = 1;
-                  else
-                    if(hold_ctr[i] > 8)
-                    {
-                        hold_ctr[i]++;
-                        touch_timer[i] = millis();
-                        PCA0CPH2 = 0xF2;
-                        PCA0CPM2 |= (1<<1);
-                        continue;
-                    }
-                    else
-                      if(hold_ctr[i] > 3)
-                        {
-                          hold_ctr[i]++;
-                          touch_timer[i] = millis();
-                          PCA0CPH2 = 0xFF;
-                          PCA0CPM2 |= (1<<1);
-                          continue;
-                        }
-                      else
-                        {
-                          //set midi channel to omni for a short press
-                          tx_int_flag = false;
-                          SBUF0 = '*';
-                          while(!tx_int_flag);
-                          tx_int_flag = false;
-                          SBUF0 = 0;
-                          while(!tx_int_flag);
-
-                          hold_ctr[i]++;
-                          touch_timer[i] = millis();
-                          PCA0CPH2 = 0xF2;
-                          PCA0CPM2 |= (1<<1);
-                          continue;
-                        }
-              }//
-
+            if (result[1])
+            {
+              program_num = 0;
+              touch_timer[i] = millis();
+              while((millis() - touch_timer[i]) < 100);
             }
 
-            hold_ctr[i] = 0;
-            last_result[i] = result[i];
-
+            tx_int_flag = false;
+            SBUF0 = program_num;
+            while (!tx_int_flag)
+              ;
           }
+          else if (i == 1) //button 1
+          {
+            tx_int_flag = false;
+            SBUF0 = 'r';
+            while (!tx_int_flag)
+              ;
+            if (program_num == 126)
+              program_num = 0;
+            else
+              program_num++;
 
+            if (result[0])
+            {
+              program_num = 0;
+              touch_timer[i] = millis();
+              while((millis() - touch_timer[i]) < 100);
+            }
 
-          switch(i){
-            case 0: PCA0CPM0 ^= (1<<1); break;
-            case 1: PCA0CPM1 ^= (1<<1); break;
-            case 2: PCA0CPM3 ^= (1<<1); break;
-            case 3: PCA0CPM2 ^= (1<<1);
-          };
+            tx_int_flag = false;
+            SBUF0 = program_num;
+            while (!tx_int_flag)
+              ;
+          }
+          else if (i == 2) //button 2
+          {
+            tx_int_flag = false;
+            SBUF0 = 'w';
+            while (!tx_int_flag)
+              ;
+            tx_int_flag = false;
+            SBUF0 = program_num;
+            while (!tx_int_flag)
+              ;
+          }
+          else if (i == 3) //button 3
+          {
+            if (hold_ctr[i] > 10)
+              P0_B3 = 1;
+            else if (hold_ctr[i] > 8)
+            {
+              hold_ctr[i]++;
+              touch_timer[i] = millis();
+              PCA0CPH2 = 0xF2;
+              PCA0CPM2 |= (1 << 1);
+              continue;
+            }
+            else if (hold_ctr[i] > 3)
+            {
+              hold_ctr[i]++;
+              touch_timer[i] = millis();
+              PCA0CPH2 = 0xFF;
+              PCA0CPM2 |= (1 << 1);
+              continue;
+            }
+            else if(hold_ctr[i] > 0)
+            {
+                hold_ctr[i]++;
+                touch_timer[i] = millis();
+                continue;
+            }
+            else
+            {
+              //short press
 
+              //set midi channel to omni
+              tx_int_flag = false;
+              SBUF0 = '*';
+              while (!tx_int_flag)
+                ;
+              tx_int_flag = false;
+              SBUF0 = 10;
+              while (!tx_int_flag)
+                ;
+              tx_int_flag = false;
+              SBUF0 = 0;
+              while (!tx_int_flag)
+                ;
+
+              hold_ctr[i]++;
+              touch_timer[i] = millis();
+              PCA0CPH2 = 0xF2;
+              PCA0CPM2 |= (1 << 1);
+              continue;
+            }
+          } //
         }
 
-// $[Generated Run-time code]
-// [Generated Run-time code]$
+        hold_ctr[i] = 0;
+        last_result[i] = result[i];
+      }
 
+      switch (i)
+      {
+      case 0:
+        PCA0CPM0 ^= (1 << 1);
+        break;
+      case 1:
+        PCA0CPM1 ^= (1 << 1);
+        break;
+      case 2:
+        PCA0CPM3 ^= (1 << 1);
+        break;
+      case 3:
+        PCA0CPM2 ^= (1 << 1);
+      };
     }
-}
 
+    // $[Generated Run-time code]
+    // [Generated Run-time code]$
+  }
+}
