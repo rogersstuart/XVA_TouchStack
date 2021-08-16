@@ -11,6 +11,10 @@
 //-----------------------------------------------------------------------------
 #include <SI_EFM8BB3_Register_Enums.h> // SFR declarations
 #include "InitDevice.h"
+#include "si_toolchain.h"
+#include "EEPROM/eeprom_config.h"
+#include "EEPROM/eeprom.h"
+#include "utility.h"
 // $[Generated Includes]
 // [Generated Includes]$
 
@@ -18,12 +22,107 @@ extern bool int_flag;
 extern bool tx_int_flag;
 extern uint32_t ms_counter;
 
-uint32_t touch_cal[4];
+uint16_t touch_cal[4];
 char last_result[4];
-uint32_t touch_timer[4];
+uint16_t touch_timer[4];
+uint16_t b_touch_timer[4];
+uint16_t lowest_active[4] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+uint16_t highest_active[4];
 char hold_ctr[4];
 
+uint8_t presets[3];
+
 char program_num = 0;
+char function_page = 0;
+
+float ttb[4];
+
+/*
+struct tt_avg{
+  uint8_t idx;
+  uint16_t s0_avg[5];
+  uint16_t s1_avg[5];
+  uint16_t s2_avg[5];
+  uint16_t s3_avg[5];
+} mv_avg;
+
+*/
+
+
+void testEEPROM(){
+
+  /*
+  eeprom_init();
+  eeprom_read_byte(0,&test_buf[0]);
+  get_dec_str(test_buf[0]);
+  eeprom_write_byte(0, 0xFD);
+  eeprom_read_byte(0,&test_buf[0]);
+    get_dec_str(test_buf[0]);
+    */
+
+/*
+  uint16_t i;
+    uint8_t tmp;
+      SFRPAGE_SWITCH()
+      ENABLE_VDDMON()
+      DISABLE_WDT()
+      SFRPAGE_RESTORE()
+      eeprom_init();
+      for(i = 0;i< EE_SIZE ;i++) {
+        if(eeprom_read_byte(i,&test_buf[i]) == ERROR)
+          goto error;
+      }
+      for(i = 0;i < 2;i++) {
+        test_buf[i] = i + 0x55;
+        if(eeprom_write_byte(i, test_buf[i]) == ERROR)
+          goto error;
+      }
+      tmp = 0;
+      while(tmp < 50){
+          for(i = 2;i< EE_SIZE; i++) {
+            test_buf[i] = i + 1;
+            if(eeprom_write_byte(i, test_buf[i] + tmp) == ERROR)
+              goto error;
+          }
+          tmp++;
+      }
+      for(i = 0; i< EE_SIZE; i++) {
+        if(eeprom_read_byte(i,&test_buf[i]) == ERROR)
+          goto error;
+        if((i == 0) || (i == 1)){
+            if ((test_buf[0] != 0x55) || (test_buf[1] != 0x56))
+              goto error;
+        }else{
+          if (test_buf[i] != (i + tmp))
+            goto error;
+        }
+      }
+      while(1);
+  error:
+    i = 0xDEAD;
+    while(1);
+    */
+}
+
+void setInterruptEN(bool en){
+  if(en)
+      IE_EA = 1; //enable interrupts
+  else
+      IE_EA = 0; //disable interrupts
+
+  _nop_();
+          _nop_();
+          _nop_();
+          _nop_();
+          _nop_();
+}
+
+void txByte(uint8_t byte){
+  tx_int_flag = false;
+    SBUF0 = byte;
+    while (!tx_int_flag)
+      ;
+}
 
 /**
  *
@@ -31,10 +130,16 @@ char program_num = 0;
 uint32_t millis()
 {
   uint32_t tmr_val = 0;
-  IE_EA = 0; //disable interrupts
+  setInterruptEN(0);
   tmr_val = ms_counter;
-  IE_EA = 1; //enable interrupts
+  setInterruptEN(1);
   return tmr_val;
+}
+
+void delayMS(uint16_t to_delay){
+  uint32_t timer = millis();
+  while(millis() - timer < to_delay)
+    WDTCN = 0xA5;
 }
 
 /**
@@ -42,19 +147,18 @@ uint32_t millis()
  */
 void resetMsTmr()
 {
-  IE_EA = 0; //disable interrupts
+  setInterruptEN(0); //disable interrupts
   ms_counter = 0;
-  IE_EA = 1; //enable interrupts
+  setInterruptEN(1); //enable interrupts
 }
 
 /**
  *
  */
-uint32_t touchTimer(char sensor_index)
+uint16_t touchTimer(char sensor_index)
 {
-
-  uint32_t timer = 0;
-  char result = 0;
+  uint16_t timer = 0;
+  uint8_t result = 0, i = 0;
 
   P0_B7 = 1;      //tx high
   P1 = 0xFF;      //set all rx port pin high
@@ -68,7 +172,7 @@ uint32_t touchTimer(char sensor_index)
   while (!int_flag)
     ;
 
-  IE_EA = 0;   //disable interrupts
+  setInterruptEN(0);  //disable interrupts
   P1MDOUT = 0; //set rx port to open drain
 
   P0_B7 = 0; //set tx low
@@ -99,10 +203,51 @@ uint32_t touchTimer(char sensor_index)
     timer++;
   }
 
-  IE_EA = 1; //enable interrupts
+  setInterruptEN(1); //enable interrupts
 
   return timer;
 }
+
+void sampleTouchSensors()
+{
+  uint8_t i,k, b;
+
+  for (i = 0; i < 4; i++)
+  {
+      b_touch_timer[i] = touchTimer(i);
+
+      ttb[i] =  ttb[i] * 0.99 + b_touch_timer[i]*0.01;
+
+      if(ttb[i] > touch_cal[i] && ttb[i] < lowest_active[i])
+                lowest_active[i] = ttb[i];
+              else
+                if(ttb[i] > highest_active[i])
+                  highest_active[i] = ttb[i];
+  }
+}
+
+uint16_t getTouchVal(uint8_t pos){
+  return ttb[pos];
+}
+
+float getAnalog(uint8_t s_idx)
+{
+  uint16_t s_range, tch_nrm;
+
+  if(lowest_active[s_idx] > highest_active[s_idx])
+    return 0;
+
+  if(getTouchVal(s_idx) <= lowest_active[s_idx])
+    return 0;
+
+  s_range = highest_active[s_idx] - lowest_active[s_idx];
+
+  tch_nrm = getTouchVal(s_idx)-lowest_active[s_idx];
+
+  return ((float)tch_nrm)/s_range;
+
+}
+
 
 void calibrateTouch()
 {
@@ -116,7 +261,210 @@ void calibrateTouch()
       touch_cal[i] += touchTimer(i);
 
     touch_cal[i] /= 10;
+
+    touch_cal[i] += touch_cal[i];
   }
+}
+
+void funcPageLEDAni()
+{
+  uint32_t timer;
+  char i;
+
+  //turn LEDs off
+  PCA0CPH2 &= (0xFF ^ (1 << 1));
+  PCA0CPH3 &= (0xFF ^ (1 << 1));
+  PCA0CPH5 &= (0xFF ^ (1 << 1));
+
+  //set the led brightness
+  PCA0CPH2 = 0xF2;
+  PCA0CPH3 = 0xF2;
+  PCA0CPH5 = 0xF2;
+
+  delayMS(250);
+
+  for(i = 0; i < 4; i++)
+  {
+    switch(function_page)
+      {
+        case 0: PCA0CPM2 ^= (1 << 1);break;
+        case 1: PCA0CPM3 ^= (1 << 1);break;
+        case 2: PCA0CPM5 ^= (1 << 1);break;
+      }
+
+      delayMS(250);
+  }
+}
+
+uint8_t button4Functions()
+{
+  //short: change page, long: reset
+
+  if (hold_ctr[3] > 10)
+      P0_B3 = 1;
+    else if (hold_ctr[3] > 8)
+    {
+      hold_ctr[3]++;
+      touch_timer[3] = millis();
+      PCA0CPH4 = 0xF2;
+      PCA0CPM4 |= (1 << 1);
+      return 1;
+    }
+    else if (hold_ctr[3] > 3)
+    {
+      hold_ctr[3]++;
+      touch_timer[3] = millis();
+      PCA0CPH4 = 0xFF;
+      PCA0CPM4 |= (1 << 1);
+      return 1;
+    }
+    else if(hold_ctr[3] > 0)
+    {
+        hold_ctr[3]++;
+        touch_timer[3] = millis();
+        return 1;
+    }
+    else
+    {
+      //short press
+
+      //change page
+        /*
+      tx_int_flag = false;
+      SBUF0 = '*';
+      while (!tx_int_flag)
+        ;
+      tx_int_flag = false;
+      SBUF0 = 10;
+      while (!tx_int_flag)
+        ;
+      tx_int_flag = false;
+      SBUF0 = 0;
+      while (!tx_int_flag)
+        ;
+        */
+
+
+
+      hold_ctr[3]++;
+      touch_timer[3] = millis();
+      PCA0CPH4 = 0xF2;
+      PCA0CPM4 |= (1 << 1);
+      return 1;
+    }
+
+  return 0;
+}
+
+void button4ShortPress()
+{
+  function_page++;
+  if(function_page > 2)
+    function_page = 0;
+
+  funcPageLEDAni();
+}
+
+/**
+ * Button 0 function page 0
+ *
+ * Program change down
+ */
+void b0F0()
+{
+  if(hold_ctr[0] == 0 || hold_ctr[0] > 2)
+    {
+
+
+  txByte('r');
+
+  if (program_num == 0)
+    program_num = 127;
+  else
+    program_num--;
+
+  /*
+  if (result[1])
+  {
+    program_num = 0;
+    touch_timer[i] = millis();
+    while((millis() - touch_timer[i]) < 100);
+  }
+  */
+
+
+  txByte(program_num);
+
+  if(hold_ctr[0] > 200)
+    hold_ctr[0] = 3;
+
+  hold_ctr[0]++;
+  touch_timer[0] = millis();
+}
+
+void b1F0(){
+
+}
+
+void b2F0(){
+
+}
+
+void button1Fuctions(){
+
+  if(function_page == 0)
+    {
+        b0F0(); //button 0 function page 0
+    }
+  else
+    if(function_page == 1)
+      {
+
+      }
+    else
+      if(function_page == 2)
+        {
+
+        }
+
+}
+
+void button2Fuctions(){
+
+  if(function_page == 0)
+    {
+        b1F0(); //button 0 function page 0
+    }
+  else
+    if(function_page == 1)
+      {
+
+      }
+    else
+      if(function_page == 2)
+        {
+
+        }
+
+}
+
+void button3Fuctions(){
+
+  if(function_page == 0)
+    {
+        b2F0(); //button 0 function page 0
+    }
+  else
+    if(function_page == 1)
+      {
+
+      }
+    else
+      if(function_page == 2)
+        {
+
+        }
+
 }
 
 //-----------------------------------------------------------------------------
@@ -133,6 +481,10 @@ void SiLabs_Startup(void)
   // [SiLabs Startup]$
 }
 
+void LED_InitRoutine(){
+
+}
+
 //-----------------------------------------------------------------------------
 // main() Routine
 // ----------------------------------------------------------------------------
@@ -142,64 +494,111 @@ int main(void)
   char result[4] = {0, 0, 0, 0};
   char flags_tmp = 0;
   uint32_t tmp_tmr = 0;
+  float scale_val = 0;
 
   WDTCN = 0xA5;
+
+
 
   // Call hardware initialization routine
   enter_DefaultMode_from_RESET();
 
   //set the initial led brightness
-  PCA0CPH0 = 0xFF;
-  PCA0CPH1 = 0xFF;
   PCA0CPH2 = 0xFF;
   PCA0CPH3 = 0xFF;
+  PCA0CPH4 = 0xFF;
+  PCA0CPH5 = 0xFF;
 
   resetMsTmr();
 
   //turn the PWM channels on
-  PCA0CPM0 ^= (1 << 1);
-  PCA0CPM1 ^= (1 << 1);
-  PCA0CPM3 ^= (1 << 1);
   PCA0CPM2 ^= (1 << 1);
+  PCA0CPM3 ^= (1 << 1);
+  PCA0CPM5 ^= (1 << 1);
+  PCA0CPM4 ^= (1 << 1);
 
   //do a little startup brightness thing
   for(i = 0xFF; i >= 0xE0; i--)
   {
-    PCA0CPH0 = i;
-    PCA0CPH1 = i;
     PCA0CPH2 = i;
     PCA0CPH3 = i;
+    PCA0CPH4 = i;
+    PCA0CPH5 = i;
 
     tmp_tmr = millis();
-    while(millis()-tmp_tmr < (2000/32))
-      WDTCN = 0xA5;
+    delayMS(2000/32);
   }
 
   //set the led brightness
-  PCA0CPH0 = 0xF2;
-  PCA0CPH1 = 0xF2;
   PCA0CPH2 = 0xF2;
   PCA0CPH3 = 0xF2;
+  PCA0CPH4 = 0xF2;
+  PCA0CPH5 = 0xF2;
 
   calibrateTouch();
 
   WDTCN = 0xA5;
 
   //turn the channels off
-  PCA0CPM0 ^= (1 << 1);
-  PCA0CPM1 ^= (1 << 1);
-  PCA0CPM3 ^= (1 << 1);
   PCA0CPM2 ^= (1 << 1);
+  PCA0CPM3 ^= (1 << 1);
+  PCA0CPM5 ^= (1 << 1);
+  PCA0CPM4 ^= (1 << 1);
+
+
+  funcPageLEDAni();
+
 
   //set program to 0
-  tx_int_flag = false;
-  SBUF0 = 'r';
-  while (!tx_int_flag)
-    ;
-  tx_int_flag = false;
-  SBUF0 = 0;
-  while (!tx_int_flag)
-    ;
+txByte('r');
+txByte(0);
+
+/*
+  while(true)
+      {
+
+        sampleTouchSensors();
+
+
+        for (i = 0; i < 4; i++)
+          {
+
+            //wait at least one ms
+                int_flag = false;
+                while (!int_flag)
+                  ;
+                int_flag = false;
+                while (!int_flag)
+                  ;
+
+              tx_int_flag = false;
+              SBUF0 = '0'+i;
+              while (!tx_int_flag);
+
+              tx_int_flag = false;
+              SBUF0 = ' ';
+              while (!tx_int_flag);
+
+              scale_val = getAnalog(i);
+            //get_dec_str(scale_val*100);
+
+            if(i == 2)
+              if(scale_val > 0)
+                {
+                  PCA0CPM1 |= (1 << 1);
+                  PCA0CPH1 = scale_val*0xFF;
+                }
+              else
+                {
+                PCA0CPM1 &= (0xFF ^ (1 << 1));
+                P0_B2 = 0;
+                }
+
+          }
+
+        WDTCN = 0xA5;
+      }
+      */
 
   while (1)
   {
@@ -207,8 +606,9 @@ int main(void)
      WDTCN = 0xA5;
 
     //gather touch results
+    sampleTouchSensors();
     for (i = 0; i < 4; i++)
-      result[i] = (touchTimer(i) > touch_cal[i]); //1 touched, 0 no touch
+      result[i] = (b_touch_timer[i] > touch_cal[i]); //1 touched, 0 no touch
 
     for (i = 0; i < 4; i++)
     {
@@ -219,32 +619,14 @@ int main(void)
       {
         touch_timer[i] = millis();
 
-        if (result[i])
+        if (result[i]) //button is touched
         {
-          if (i == 0) //button 0
+          if (i == 0) //button 1
           {
-            tx_int_flag = false;
-            SBUF0 = 'r';
-            while (!tx_int_flag)
-              ;
-            if (program_num == 0)
-              program_num = 127;
-            else
-              program_num--;
-
-            if (result[1])
-            {
-              program_num = 0;
-              touch_timer[i] = millis();
-              while((millis() - touch_timer[i]) < 100);
-            }
-
-            tx_int_flag = false;
-            SBUF0 = program_num;
-            while (!tx_int_flag)
-              ;
+              button1Fuctions();
+              continue;
           }
-          else if (i == 1) //button 1
+          else if (i == 1) //button 2
           {
             tx_int_flag = false;
             SBUF0 = 'r';
@@ -267,7 +649,7 @@ int main(void)
             while (!tx_int_flag)
               ;
           }
-          else if (i == 2) //button 2
+          else if (i == 2) //button 3
           {
             tx_int_flag = false;
             SBUF0 = 'w';
@@ -278,58 +660,18 @@ int main(void)
             while (!tx_int_flag)
               ;
           }
-          else if (i == 3) //button 3
+          else if (i == 3) //button 4
           {
-            if (hold_ctr[i] > 10)
-              P0_B3 = 1;
-            else if (hold_ctr[i] > 8)
-            {
-              hold_ctr[i]++;
-              touch_timer[i] = millis();
-              PCA0CPH2 = 0xF2;
-              PCA0CPM2 |= (1 << 1);
+            if(button4Functions())
               continue;
-            }
-            else if (hold_ctr[i] > 3)
-            {
-              hold_ctr[i]++;
-              touch_timer[i] = millis();
-              PCA0CPH2 = 0xFF;
-              PCA0CPM2 |= (1 << 1);
-              continue;
-            }
-            else if(hold_ctr[i] > 0)
-            {
-                hold_ctr[i]++;
-                touch_timer[i] = millis();
-                continue;
-            }
-            else
-            {
-              //short press
-
-              //set midi channel to omni
-              tx_int_flag = false;
-              SBUF0 = '*';
-              while (!tx_int_flag)
-                ;
-              tx_int_flag = false;
-              SBUF0 = 10;
-              while (!tx_int_flag)
-                ;
-              tx_int_flag = false;
-              SBUF0 = 0;
-              while (!tx_int_flag)
-                ;
-
-              hold_ctr[i]++;
-              touch_timer[i] = millis();
-              PCA0CPH2 = 0xF2;
-              PCA0CPM2 |= (1 << 1);
-              continue;
-            }
           } //
         }
+
+        if(i == 3 && hold_ctr[3] < 3)
+        {
+            button4ShortPress();
+        }
+
 
         hold_ctr[i] = 0;
         last_result[i] = result[i];
@@ -338,16 +680,20 @@ int main(void)
       switch (i)
       {
       case 0:
-        PCA0CPM0 ^= (1 << 1);
+        PCA0CPM2 ^= (1 << 1);
+        PCA0CPH2 = 0xF2;
         break;
       case 1:
-        PCA0CPM1 ^= (1 << 1);
+        PCA0CPM3 ^= (1 << 1);
+        PCA0CPH3 = 0xF2;
         break;
       case 2:
-        PCA0CPM3 ^= (1 << 1);
+        PCA0CPM5 ^= (1 << 1);
+        PCA0CPH5 = 0xF2;
         break;
       case 3:
-        PCA0CPM2 ^= (1 << 1);
+        PCA0CPM4 ^= (1 << 1);
+        PCA0CPH4 = 0xF2;
       };
     }
 
