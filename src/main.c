@@ -20,20 +20,23 @@
 
 extern bool int_flag;
 extern bool tx_int_flag;
-extern uint32_t ms_counter;
+extern uint16_t ms_counter;
+
+#define LED_LOW 0xFF
+#define LED_HIGH 0xF2
 
 uint16_t touch_cal[4];
-char last_result[4];
+uint8_t last_result[4];
 uint16_t touch_timer[4];
 uint16_t b_touch_timer[4];
 uint16_t lowest_active[4] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 uint16_t highest_active[4];
-char hold_ctr[4];
+uint8_t hold_ctr[4];
 
 uint8_t presets[3];
 
-char program_num = 0;
-char function_page = 0;
+uint8_t program_num = 0;
+uint8_t function_page = 0;
 
 float ttb[4];
 
@@ -48,8 +51,8 @@ struct tt_avg{
 
 */
 
-
-void testEEPROM(){
+void testEEPROM()
+{
 
   /*
   eeprom_init();
@@ -60,7 +63,7 @@ void testEEPROM(){
     get_dec_str(test_buf[0]);
     */
 
-/*
+  /*
   uint16_t i;
     uint8_t tmp;
       SFRPAGE_SWITCH()
@@ -104,42 +107,45 @@ void testEEPROM(){
     */
 }
 
-void setInterruptEN(bool en){
-  if(en)
-      IE_EA = 1; //enable interrupts
+void setInterruptEN(bool en)
+{
+  if (en)
+    IE_EA = 1; //enable interrupts
   else
-      IE_EA = 0; //disable interrupts
+    IE_EA = 0; //disable interrupts
 
   _nop_();
-          _nop_();
-          _nop_();
-          _nop_();
-          _nop_();
+  _nop_();
+  _nop_();
+  _nop_();
+  _nop_();
 }
 
-void txByte(uint8_t byte){
+void txByte(uint8_t byte)
+{
   tx_int_flag = false;
-    SBUF0 = byte;
-    while (!tx_int_flag)
-      ;
+  SBUF0 = byte;
+  while (!tx_int_flag)
+    ;
 }
 
 /**
  *
  */
-uint32_t millis()
+uint16_t millis()
 {
-  uint32_t tmr_val = 0;
+  uint16_t tmr_val = 0;
   setInterruptEN(0);
   tmr_val = ms_counter;
   setInterruptEN(1);
   return tmr_val;
 }
 
-void delayMS(uint16_t to_delay){
-  uint32_t timer = millis();
-  while(millis() - timer < to_delay)
-    WDTCN = 0xA5;
+void delayMS(uint16_t to_delay)
+{
+  uint16_t timer = millis();
+  while (millis() - timer < to_delay)
+    petDog();
 }
 
 /**
@@ -150,6 +156,68 @@ void resetMsTmr()
   setInterruptEN(0); //disable interrupts
   ms_counter = 0;
   setInterruptEN(1); //enable interrupts
+}
+
+void setLEDLevel(uint8_t idx, uint8_t level)
+{
+  switch (idx)
+  {
+  case 0:
+
+    PCA0CPH2 = level;
+    break;
+  case 1:
+
+    PCA0CPH3 = level;
+    break;
+  case 2:
+
+    PCA0CPH5 = level;
+    break;
+  case 3:
+
+    PCA0CPH4 = level;
+  };
+}
+
+void setLED_EN(uint8_t idx, bool en)
+{
+  if (en)
+  {
+
+    switch (idx)
+    {
+    case 0:
+      PCA0CPM2 |= ((1 << 1));
+      break;
+    case 1:
+      PCA0CPM3 |= ((1 << 1));
+      break;
+    case 2:
+      PCA0CPM5 |= ((1 << 1));
+      break;
+    case 3:
+      PCA0CPM4 |= ((1 << 1));
+    };
+  }
+  else
+  {
+
+    switch (idx)
+    {
+    case 0:
+      PCA0CPM2 &= (~(1 << 1));
+      break;
+    case 1:
+      PCA0CPM3 &= (~(1 << 1));
+      break;
+    case 2:
+      PCA0CPM5 &= (~(1 << 1));
+      break;
+    case 3:
+      PCA0CPM4 &= (~(1 << 1));
+    };
+  }
 }
 
 /**
@@ -172,8 +240,8 @@ uint16_t touchTimer(char sensor_index)
   while (!int_flag)
     ;
 
-  setInterruptEN(0);  //disable interrupts
-  P1MDOUT = 0; //set rx port to open drain
+  setInterruptEN(0); //disable interrupts
+  P1MDOUT = 0;       //set rx port to open drain
 
   P0_B7 = 0; //set tx low
 
@@ -210,23 +278,23 @@ uint16_t touchTimer(char sensor_index)
 
 void sampleTouchSensors()
 {
-  uint8_t i,k, b;
+  uint8_t i, k, b;
 
   for (i = 0; i < 4; i++)
   {
-      b_touch_timer[i] = touchTimer(i);
+    b_touch_timer[i] = touchTimer(i);
 
-      ttb[i] =  ttb[i] * 0.99 + b_touch_timer[i]*0.01;
+    ttb[i] = ttb[i] * 0.99 + b_touch_timer[i] * 0.01;
 
-      if(ttb[i] > touch_cal[i] && ttb[i] < lowest_active[i])
-                lowest_active[i] = ttb[i];
-              else
-                if(ttb[i] > highest_active[i])
-                  highest_active[i] = ttb[i];
+    if (ttb[i] > touch_cal[i] && ttb[i] < lowest_active[i])
+      lowest_active[i] = ttb[i];
+    else if (ttb[i] > highest_active[i])
+      highest_active[i] = ttb[i];
   }
 }
 
-uint16_t getTouchVal(uint8_t pos){
+uint16_t getTouchVal(uint8_t pos)
+{
   return ttb[pos];
 }
 
@@ -234,20 +302,18 @@ float getAnalog(uint8_t s_idx)
 {
   uint16_t s_range, tch_nrm;
 
-  if(lowest_active[s_idx] > highest_active[s_idx])
+  if (lowest_active[s_idx] > highest_active[s_idx])
     return 0;
 
-  if(getTouchVal(s_idx) <= lowest_active[s_idx])
+  if (getTouchVal(s_idx) <= lowest_active[s_idx])
     return 0;
 
   s_range = highest_active[s_idx] - lowest_active[s_idx];
 
-  tch_nrm = getTouchVal(s_idx)-lowest_active[s_idx];
+  tch_nrm = getTouchVal(s_idx) - lowest_active[s_idx];
 
-  return ((float)tch_nrm)/s_range;
-
+  return ((float)tch_nrm) / s_range;
 }
-
 
 void calibrateTouch()
 {
@@ -257,7 +323,7 @@ void calibrateTouch()
   {
     touch_cal[i] = touchTimer(i);
 
-    for(k = 1; k < 10; k++)
+    for (k = 1; k < 10; k++)
       touch_cal[i] += touchTimer(i);
 
     touch_cal[i] /= 10;
@@ -268,7 +334,7 @@ void calibrateTouch()
 
 void funcPageLEDAni()
 {
-  uint32_t timer;
+  uint16_t timer;
   char i;
 
   //turn LEDs off
@@ -283,16 +349,22 @@ void funcPageLEDAni()
 
   delayMS(250);
 
-  for(i = 0; i < 4; i++)
+  for (i = 0; i < 4; i++)
   {
-    switch(function_page)
-      {
-        case 0: PCA0CPM2 ^= (1 << 1);break;
-        case 1: PCA0CPM3 ^= (1 << 1);break;
-        case 2: PCA0CPM5 ^= (1 << 1);break;
-      }
+    switch (function_page)
+    {
+    case 0:
+      PCA0CPM2 ^= (1 << 1);
+      break;
+    case 1:
+      PCA0CPM3 ^= (1 << 1);
+      break;
+    case 2:
+      PCA0CPM5 ^= (1 << 1);
+      break;
+    }
 
-      delayMS(250);
+    delayMS(250);
   }
 }
 
@@ -301,35 +373,35 @@ uint8_t button4Functions()
   //short: change page, long: reset
 
   if (hold_ctr[3] > 10)
-      P0_B3 = 1;
-    else if (hold_ctr[3] > 8)
-    {
-      hold_ctr[3]++;
-      touch_timer[3] = millis();
-      PCA0CPH4 = 0xF2;
-      PCA0CPM4 |= (1 << 1);
-      return 1;
-    }
-    else if (hold_ctr[3] > 3)
-    {
-      hold_ctr[3]++;
-      touch_timer[3] = millis();
-      PCA0CPH4 = 0xFF;
-      PCA0CPM4 |= (1 << 1);
-      return 1;
-    }
-    else if(hold_ctr[3] > 0)
-    {
-        hold_ctr[3]++;
-        touch_timer[3] = millis();
-        return 1;
-    }
-    else
-    {
-      //short press
+    P0_B3 = 1;
+  else if (hold_ctr[3] > 8)
+  {
+    hold_ctr[3]++;
+    touch_timer[3] = millis();
+    PCA0CPH4 = 0xF2;
+    PCA0CPM4 |= (1 << 1);
+    return 1;
+  }
+  else if (hold_ctr[3] > 3)
+  {
+    hold_ctr[3]++;
+    touch_timer[3] = millis();
+    PCA0CPH4 = 0xFF;
+    PCA0CPM4 |= (1 << 1);
+    return 1;
+  }
+  else if (hold_ctr[3] > 0)
+  {
+    hold_ctr[3]++;
+    touch_timer[3] = millis();
+    return 1;
+  }
+  else
+  {
+    //short press
 
-      //change page
-        /*
+    //change page
+    /*
       tx_int_flag = false;
       SBUF0 = '*';
       while (!tx_int_flag)
@@ -344,14 +416,12 @@ uint8_t button4Functions()
         ;
         */
 
-
-
-      hold_ctr[3]++;
-      touch_timer[3] = millis();
-      PCA0CPH4 = 0xF2;
-      PCA0CPM4 |= (1 << 1);
-      return 1;
-    }
+    hold_ctr[3]++;
+    touch_timer[3] = millis();
+    PCA0CPH4 = 0xF2;
+    PCA0CPM4 |= (1 << 1);
+    return 1;
+  }
 
   return 0;
 }
@@ -359,112 +429,89 @@ uint8_t button4Functions()
 void button4ShortPress()
 {
   function_page++;
-  if(function_page > 2)
+  if (function_page > 2)
     function_page = 0;
 
   funcPageLEDAni();
 }
 
 /**
- * Button 0 function page 0
+ * Button 1 function page 0
  *
  * Program change down
  */
 void b0F0()
 {
-  if(hold_ctr[0] == 0 || hold_ctr[0] > 2)
-    {
-
-
-  txByte('r');
-
-  if (program_num == 0)
-    program_num = 127;
-  else
-    program_num--;
-
-  /*
-  if (result[1])
+  if (hold_ctr[0] == 0 || hold_ctr[0] > 2)
   {
-    program_num = 0;
-    touch_timer[i] = millis();
-    while((millis() - touch_timer[i]) < 100);
+
+    if (program_num == 0)
+      program_num = 127;
+    else
+      program_num--;
+
+    txByte('r');
+    txByte(program_num);
   }
-  */
 
-
-  txByte(program_num);
-
-  if(hold_ctr[0] > 200)
+  if (hold_ctr[0] > 200)
     hold_ctr[0] = 3;
 
   hold_ctr[0]++;
   touch_timer[0] = millis();
 }
 
-void b1F0(){
-
+void b1F0()
+{
 }
 
-void b2F0(){
-
+void b2F0()
+{
 }
 
-void button1Fuctions(){
+void button1Fuctions()
+{
 
-  if(function_page == 0)
-    {
-        b0F0(); //button 0 function page 0
-    }
-  else
-    if(function_page == 1)
-      {
-
-      }
-    else
-      if(function_page == 2)
-        {
-
-        }
-
+  if (function_page == 0)
+  {
+    b0F0(); //button 0 function page 0
+  }
+  else if (function_page == 1)
+  {
+  }
+  else if (function_page == 2)
+  {
+  }
 }
 
-void button2Fuctions(){
+void button2Fuctions()
+{
 
-  if(function_page == 0)
-    {
-        b1F0(); //button 0 function page 0
-    }
-  else
-    if(function_page == 1)
-      {
-
-      }
-    else
-      if(function_page == 2)
-        {
-
-        }
-
+  if (function_page == 0)
+  {
+    b1F0(); //button 0 function page 0
+  }
+  else if (function_page == 1)
+  {
+  }
+  else if (function_page == 2)
+  {
+  }
 }
 
-void button3Fuctions(){
+void button3Fuctions()
+{
 
-  if(function_page == 0)
-    {
-        b2F0(); //button 0 function page 0
-    }
-  else
-    if(function_page == 1)
-      {
-
-      }
-    else
-      if(function_page == 2)
-        {
-
-        }
-
+  if (function_page == 0)
+  {
+    b2F0(); //button 0 function page 0
+  }
+  else if (function_page == 1)
+  {
+  }
+  else if (function_page == 2)
+  {
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -481,8 +528,8 @@ void SiLabs_Startup(void)
   // [SiLabs Startup]$
 }
 
-void LED_InitRoutine(){
-
+void LED_InitRoutine()
+{
 }
 
 //-----------------------------------------------------------------------------
@@ -490,70 +537,55 @@ void LED_InitRoutine(){
 // ----------------------------------------------------------------------------
 int main(void)
 {
-  int i = 0;
+  int i = 0, k = 0;
   char result[4] = {0, 0, 0, 0};
   char flags_tmp = 0;
-  uint32_t tmp_tmr = 0;
+  uint16_t tmp_tmr = 0;
   float scale_val = 0;
 
-  WDTCN = 0xA5;
-
-
+  petDog();
 
   // Call hardware initialization routine
   enter_DefaultMode_from_RESET();
 
   //set the initial led brightness
-  PCA0CPH2 = 0xFF;
-  PCA0CPH3 = 0xFF;
-  PCA0CPH4 = 0xFF;
-  PCA0CPH5 = 0xFF;
+  for (i = 0; i < 4; i++)
+    setLEDLevel(i, LED_LOW);
 
   resetMsTmr();
 
   //turn the PWM channels on
-  PCA0CPM2 ^= (1 << 1);
-  PCA0CPM3 ^= (1 << 1);
-  PCA0CPM5 ^= (1 << 1);
-  PCA0CPM4 ^= (1 << 1);
+  for (i = 0; i < 4; i++)
+    setLED_EN(i, 1);
 
   //do a little startup brightness thing
-  for(i = 0xFF; i >= 0xE0; i--)
+  for (i = 0xFF; i >= 0xE0; i--)
   {
-    PCA0CPH2 = i;
-    PCA0CPH3 = i;
-    PCA0CPH4 = i;
-    PCA0CPH5 = i;
+    for (k = 0; k < 4; k++)
+      setLEDLevel(k, i);
 
-    tmp_tmr = millis();
-    delayMS(2000/32);
+    delayMS(2000 / 32);
   }
 
   //set the led brightness
-  PCA0CPH2 = 0xF2;
-  PCA0CPH3 = 0xF2;
-  PCA0CPH4 = 0xF2;
-  PCA0CPH5 = 0xF2;
+  for (i = 0; i < 4; i++)
+    setLEDLevel(i, LED_HIGH);
 
   calibrateTouch();
 
   WDTCN = 0xA5;
 
   //turn the channels off
-  PCA0CPM2 ^= (1 << 1);
-  PCA0CPM3 ^= (1 << 1);
-  PCA0CPM5 ^= (1 << 1);
-  PCA0CPM4 ^= (1 << 1);
-
+  for (i = 0; i < 4; i++)
+    setLED_EN(i, 0);
 
   funcPageLEDAni();
 
-
   //set program to 0
-txByte('r');
-txByte(0);
+  txByte('r');
+  txByte(0);
 
-/*
+  /*
   while(true)
       {
 
@@ -603,7 +635,7 @@ txByte(0);
   while (1)
   {
 
-     WDTCN = 0xA5;
+    petDog();
 
     //gather touch results
     sampleTouchSensors();
@@ -623,8 +655,8 @@ txByte(0);
         {
           if (i == 0) //button 1
           {
-              button1Fuctions();
-              continue;
+            button1Fuctions();
+            continue;
           }
           else if (i == 1) //button 2
           {
@@ -641,7 +673,8 @@ txByte(0);
             {
               program_num = 0;
               touch_timer[i] = millis();
-              while((millis() - touch_timer[i]) < 100);
+              while ((millis() - touch_timer[i]) < 100)
+                ;
             }
 
             tx_int_flag = false;
@@ -662,16 +695,15 @@ txByte(0);
           }
           else if (i == 3) //button 4
           {
-            if(button4Functions())
+            if (button4Functions())
               continue;
           } //
         }
 
-        if(i == 3 && hold_ctr[3] < 3)
+        if (i == 3 && hold_ctr[3] < 3)
         {
-            button4ShortPress();
+          button4ShortPress();
         }
-
 
         hold_ctr[i] = 0;
         last_result[i] = result[i];

@@ -12,7 +12,7 @@
 volatile bool int_flag = false;
 volatile bool tx_int_flag = false;
 
-volatile uint32_t ms_counter = 0;
+volatile uint16_t ms_counter = 0;
 
 //-----------------------------------------------------------------------------
 // TIMER2_ISR
@@ -25,11 +25,10 @@ volatile uint32_t ms_counter = 0;
 //-----------------------------------------------------------------------------
 SI_INTERRUPT (TIMER2_ISR, TIMER2_IRQn)
   {
-    TMR2CN0_TF2H = 0; //Clear the interrupt flag for Timer 2.
-
     int_flag = true;
-
     ms_counter++;
+
+    TMR2CN0_TF2H = 0; //Clear the interrupt flag for Timer 2.
   }
 
 //-----------------------------------------------------------------------------
@@ -43,8 +42,8 @@ SI_INTERRUPT (TIMER2_ISR, TIMER2_IRQn)
 //-----------------------------------------------------------------------------
 SI_INTERRUPT (UART0_ISR, UART0_IRQn)
   {
-    SCON0_TI = 0;
-
     tx_int_flag = true;
+
+    SCON0_TI = 0;
   }
 

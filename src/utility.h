@@ -13,5 +13,6 @@
 extern bool tx_int_flag;
 
 void get_dec_str (uint16_t val);
+void petDog();
 
 #endif /* UTILITY_H_ */

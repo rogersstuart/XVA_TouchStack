@@ -36,3 +36,7 @@ void get_dec_str (uint16_t val)
   SBUF0 = '\n';
   while (!tx_int_flag);
 }
+
+void petDog(){
+  WDTCN = 0xA5;
+}
