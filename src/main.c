@@ -9,115 +9,99 @@
 //-----------------------------------------------------------------------------
 // Includes
 //-----------------------------------------------------------------------------
+#include "main.h"
+
 #include <SI_EFM8BB3_Register_Enums.h> // SFR declarations
 #include "InitDevice.h"
+#include "si_toolchain.h"
+
+#include "synth_interface/synth_common.h"
+#include "utility.h"
+#include "led_controls.h"
+#include "touch_keys.h"
+
+#include "button_functions/page0.h"
+#include "button_functions/page1.h"
+#include "button_functions/page2.h"
+#include "button_functions/page3.h"
+
+#include "persistance.h"
+#include "touch_keys.h"
+
+typedef void(*BUTTON_FUNC)(uint8_t f);
+
+BUTTON_FUNC code BUTTON_1_FUNC[4] = {&b0F0, &b0F1, &b0F2, &b0F3};
+BUTTON_FUNC code BUTTON_2_FUNC[4] = {&b1F0, &b1F1, &b1F2, &b1F3};
+BUTTON_FUNC code BUTTON_3_FUNC[4] = {&b2F0, &b2F1, &b2F2, &b2F3};
+
+BUTTON_FUNC * code B_FUNC_PAGES[3] = {BUTTON_1_FUNC, BUTTON_2_FUNC, BUTTON_3_FUNC};
+
 // $[Generated Includes]
 // [Generated Includes]$
 
-extern bool int_flag;
-extern bool tx_int_flag;
-extern uint32_t ms_counter;
+uint8_t last_result[4];
+uint16_t touch_timer[4];
+uint8_t hold_ctr[4];
 
-uint32_t touch_cal[4];
-char last_result[4];
-uint32_t touch_timer[4];
-char hold_ctr[4];
-
-char program_num = 0;
-
-/**
- *
- */
-uint32_t millis()
+uint8_t button4Functions()
 {
-  uint32_t tmr_val = 0;
-  IE_EA = 0; //disable interrupts
-  tmr_val = ms_counter;
-  IE_EA = 1; //enable interrupts
-  return tmr_val;
-}
+  uint8_t i = 3;
 
-/**
- *
- */
-void resetMsTmr()
-{
-  IE_EA = 0; //disable interrupts
-  ms_counter = 0;
-  IE_EA = 1; //enable interrupts
-}
+  //short: change page, long: reset
 
-/**
- *
- */
-uint32_t touchTimer(char sensor_index)
-{
+  if (hold_ctr[i] > RESET_HOLD_COUNT)
+    P0_B3 = 1;
 
-  uint32_t timer = 0;
-  char result = 0;
-
-  P0_B7 = 1;      //tx high
-  P1 = 0xFF;      //set all rx port pin high
-  P1MDOUT = 0xFF; //change rx port to push pull
-
-  //wait at least one ms
-  int_flag = false;
-  while (!int_flag)
-    ;
-  int_flag = false;
-  while (!int_flag)
-    ;
-
-  IE_EA = 0;   //disable interrupts
-  P1MDOUT = 0; //set rx port to open drain
-
-  P0_B7 = 0; //set tx low
-
-  /**
- * begin testing sensor
- */
-
-  //wait until the rx pin is low
-  result = true;
-  while (result)
+  else if (hold_ctr[i] > 8)
   {
-    switch (sensor_index)
-    {
-    case 0:
-      result = P1_B0;
-      break;
-    case 1:
-      result = P1_B1;
-      break;
-    case 2:
-      result = P1_B2;
-      break;
-    case 3:
-      result = P1_B3;
-    };
+    hold_ctr[i]++;
+    touch_timer[i] = millis();
+    PCA0CPH4 = 0xF2;
+    PCA0CPM4 |= (1 << 1);
+    return 1;
+  }
+  else if (hold_ctr[i] > 3)
+  {
+    hold_ctr[i]++;
+    touch_timer[i] = millis();
+    PCA0CPH4 = 0xFF;
+    PCA0CPM4 |= (1 << 1);
+    return 1;
+  }
+  else if (hold_ctr[i] > 0)
+  {
+    hold_ctr[i]++;
+    touch_timer[i] = millis();
+    return 1;
+  }
+  else
+  {
+    //short press
 
-    timer++;
+    hold_ctr[i]++;
+    touch_timer[i] = millis();
+    PCA0CPH4 = 0xF2;
+    PCA0CPM4 |= (1 << 1);
+    return 1;
   }
 
-  IE_EA = 1; //enable interrupts
-
-  return timer;
+  return 0;
 }
 
-void calibrateTouch()
+/**
+ * button 4 (top) short press
+ */
+void button4ShortPress()
 {
-  int i = 0, k = 0;
+  //switch page
+  active_config.function_page++;
+  if (active_config.function_page > 3)
+    active_config.function_page = 0;
 
-  for (i = 0; i < 4; i++)
-  {
-    touch_cal[i] = touchTimer(i);
-
-    for(k = 1; k < 10; k++)
-      touch_cal[i] += touchTimer(i);
-
-    touch_cal[i] /= 10;
-  }
+  //show page indicator animation
+  funcPageLEDAni(active_config.function_page);
 }
+
 
 //-----------------------------------------------------------------------------
 // SiLabs_Startup() Routine
@@ -133,222 +117,74 @@ void SiLabs_Startup(void)
   // [SiLabs Startup]$
 }
 
+
 //-----------------------------------------------------------------------------
 // main() Routine
 // ----------------------------------------------------------------------------
 int main(void)
 {
-  int i = 0;
-  char result[4] = {0, 0, 0, 0};
-  char flags_tmp = 0;
-  uint32_t tmp_tmr = 0;
-
-  WDTCN = 0xA5;
+  uint16_t i = 0, k = 0;
+  uint8_t result[4] = {0, 0, 0, 0};
 
   // Call hardware initialization routine
   enter_DefaultMode_from_RESET();
 
-  //set the initial led brightness
-  PCA0CPH0 = 0xFF;
-  PCA0CPH1 = 0xFF;
-  PCA0CPH2 = 0xFF;
-  PCA0CPH3 = 0xFF;
+  delayMS(2000);
 
-  resetMsTmr();
+  LED_InitRoutine(); //fade up
 
-  //turn the PWM channels on
-  PCA0CPM0 ^= (1 << 1);
-  PCA0CPM1 ^= (1 << 1);
-  PCA0CPM3 ^= (1 << 1);
-  PCA0CPM2 ^= (1 << 1);
-
-  //do a little startup brightness thing
-  for(i = 0xFF; i >= 0xE0; i--)
+  if(!read_cfg())
   {
-    PCA0CPH0 = i;
-    PCA0CPH1 = i;
-    PCA0CPH2 = i;
-    PCA0CPH3 = i;
-
-    tmp_tmr = millis();
-    while(millis()-tmp_tmr < (2000/32))
-      WDTCN = 0xA5;
+    calibrateTouch();
+    write_cfg();
   }
 
-  //set the led brightness
-  PCA0CPH0 = 0xF2;
-  PCA0CPH1 = 0xF2;
-  PCA0CPH2 = 0xF2;
-  PCA0CPH3 = 0xF2;
+  delayMS(250);
 
-  calibrateTouch();
+  funcPageLEDAni(active_config.function_page); //page indicator
 
-  WDTCN = 0xA5;
+  init_synth_mode();
 
-  //turn the channels off
-  PCA0CPM0 ^= (1 << 1);
-  PCA0CPM1 ^= (1 << 1);
-  PCA0CPM3 ^= (1 << 1);
-  PCA0CPM2 ^= (1 << 1);
-
-  //set program to 0
-  tx_int_flag = false;
-  SBUF0 = 'r';
-  while (!tx_int_flag)
-    ;
-  tx_int_flag = false;
-  SBUF0 = 0;
-  while (!tx_int_flag)
-    ;
+  LED_InitRoutine(); //fade up
 
   while (1)
   {
+    petDog();
 
-     WDTCN = 0xA5;
+    sampleTouchSensors();
 
-    //gather touch results
     for (i = 0; i < 4; i++)
-      result[i] = (touchTimer(i) > touch_cal[i]); //1 touched, 0 no touch
+      result[i] = (b_touch_timer[i] > active_config.touch_cal[i]); //1 touched, 0 no touch
 
     for (i = 0; i < 4; i++)
     {
-
       if (((result[i] == last_result[i]) && hold_ctr[i] == 0) || (millis() - touch_timer[i]) < 250)
         continue;
       else
       {
         touch_timer[i] = millis();
 
-        if (result[i])
+        if (result[i]) //button is touched
         {
-          if (i == 0) //button 0
-          {
-            tx_int_flag = false;
-            SBUF0 = 'r';
-            while (!tx_int_flag)
-              ;
-            if (program_num == 0)
-              program_num = 127;
-            else
-              program_num--;
+          if(i < BUTTON_4)
+            B_FUNC_PAGES[i][active_config.function_page](0);
+          else
+            button4Functions();
 
-            if (result[1])
-            {
-              program_num = 0;
-              touch_timer[i] = millis();
-              while((millis() - touch_timer[i]) < 100);
-            }
-
-            tx_int_flag = false;
-            SBUF0 = program_num;
-            while (!tx_int_flag)
-              ;
-          }
-          else if (i == 1) //button 1
-          {
-            tx_int_flag = false;
-            SBUF0 = 'r';
-            while (!tx_int_flag)
-              ;
-            if (program_num == 126)
-              program_num = 0;
-            else
-              program_num++;
-
-            if (result[0])
-            {
-              program_num = 0;
-              touch_timer[i] = millis();
-              while((millis() - touch_timer[i]) < 100);
-            }
-
-            tx_int_flag = false;
-            SBUF0 = program_num;
-            while (!tx_int_flag)
-              ;
-          }
-          else if (i == 2) //button 2
-          {
-            tx_int_flag = false;
-            SBUF0 = 'w';
-            while (!tx_int_flag)
-              ;
-            tx_int_flag = false;
-            SBUF0 = program_num;
-            while (!tx_int_flag)
-              ;
-          }
-          else if (i == 3) //button 3
-          {
-            if (hold_ctr[i] > 10)
-              P0_B3 = 1;
-            else if (hold_ctr[i] > 8)
-            {
-              hold_ctr[i]++;
-              touch_timer[i] = millis();
-              PCA0CPH2 = 0xF2;
-              PCA0CPM2 |= (1 << 1);
-              continue;
-            }
-            else if (hold_ctr[i] > 3)
-            {
-              hold_ctr[i]++;
-              touch_timer[i] = millis();
-              PCA0CPH2 = 0xFF;
-              PCA0CPM2 |= (1 << 1);
-              continue;
-            }
-            else if(hold_ctr[i] > 0)
-            {
-                hold_ctr[i]++;
-                touch_timer[i] = millis();
-                continue;
-            }
-            else
-            {
-              //short press
-
-              //set midi channel to omni
-              tx_int_flag = false;
-              SBUF0 = '*';
-              while (!tx_int_flag)
-                ;
-              tx_int_flag = false;
-              SBUF0 = 10;
-              while (!tx_int_flag)
-                ;
-              tx_int_flag = false;
-              SBUF0 = 0;
-              while (!tx_int_flag)
-                ;
-
-              hold_ctr[i]++;
-              touch_timer[i] = millis();
-              PCA0CPH2 = 0xF2;
-              PCA0CPM2 |= (1 << 1);
-              continue;
-            }
-          } //
+          continue;
         }
+
+        if (i == BUTTON_4 && hold_ctr[BUTTON_4] < 3)
+          button4ShortPress();
+
+          if (i < BUTTON_4 && hold_ctr[i] < SHORT_PRESS_MAX_HOLD_COUNT)
+            B_FUNC_PAGES[i][active_config.function_page](SHORT_PRESS);
 
         hold_ctr[i] = 0;
         last_result[i] = result[i];
       }
 
-      switch (i)
-      {
-      case 0:
-        PCA0CPM0 ^= (1 << 1);
-        break;
-      case 1:
-        PCA0CPM1 ^= (1 << 1);
-        break;
-      case 2:
-        PCA0CPM3 ^= (1 << 1);
-        break;
-      case 3:
-        PCA0CPM2 ^= (1 << 1);
-      };
+      resetLED();
     }
 
     // $[Generated Run-time code]

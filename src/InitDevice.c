@@ -38,6 +38,7 @@ enter_DefaultMode_from_RESET (void)
   TIMER16_2_enter_DefaultMode_from_RESET ();
   TIMER_SETUP_0_enter_DefaultMode_from_RESET ();
   PCA_0_enter_DefaultMode_from_RESET ();
+  PCACH_0_enter_DefaultMode_from_RESET ();
   UART_0_enter_DefaultMode_from_RESET ();
   INTERRUPT_0_enter_DefaultMode_from_RESET ();
   // Restore the SFRPAGE
@@ -100,14 +101,14 @@ PORTS_0_enter_DefaultMode_from_RESET (void)
   /***********************************************************************
    - P0.0 is high. Set P0.0 to drive or float high
    - P0.1 is low. Set P0.1 to drive low
-   - P0.2 is high. Set P0.2 to drive or float high
+   - P0.2 is low. Set P0.2 to drive low
    - P0.3 is low. Set P0.3 to drive low
    - P0.4 is high. Set P0.4 to drive or float high
    - P0.5 is high. Set P0.5 to drive or float high
    - P0.6 is high. Set P0.6 to drive or float high
    - P0.7 is low. Set P0.7 to drive low
    ***********************************************************************/
-  P0 = P0_B0__HIGH | P0_B1__LOW | P0_B2__HIGH | P0_B3__LOW | P0_B4__HIGH
+  P0 = P0_B0__HIGH | P0_B1__LOW | P0_B2__LOW | P0_B3__LOW | P0_B4__HIGH
       | P0_B5__HIGH | P0_B6__HIGH | P0_B7__LOW;
   // [P0 - Port 0 Pin Latch]$
 
@@ -115,7 +116,7 @@ PORTS_0_enter_DefaultMode_from_RESET (void)
   /***********************************************************************
    - P0.0 output is open-drain
    - P0.1 output is push-pull
-   - P0.2 output is open-drain
+   - P0.2 output is push-pull
    - P0.3 output is push-pull
    - P0.4 output is push-pull
    - P0.5 output is open-drain
@@ -123,39 +124,26 @@ PORTS_0_enter_DefaultMode_from_RESET (void)
    - P0.7 output is open-drain
    ***********************************************************************/
   P0MDOUT = P0MDOUT_B0__OPEN_DRAIN | P0MDOUT_B1__PUSH_PULL
-      | P0MDOUT_B2__OPEN_DRAIN | P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL
+      | P0MDOUT_B2__PUSH_PULL | P0MDOUT_B3__PUSH_PULL | P0MDOUT_B4__PUSH_PULL
       | P0MDOUT_B5__OPEN_DRAIN | P0MDOUT_B6__OPEN_DRAIN
       | P0MDOUT_B7__OPEN_DRAIN;
   // [P0MDOUT - Port 0 Output Mode]$
 
   // $[P0MDIN - Port 0 Input Mode]
-  /***********************************************************************
-   - P0.0 pin is configured for digital mode
-   - P0.1 pin is configured for digital mode
-   - P0.2 pin is configured for analog mode
-   - P0.3 pin is configured for digital mode
-   - P0.4 pin is configured for digital mode
-   - P0.5 pin is configured for digital mode
-   - P0.6 pin is configured for digital mode
-   - P0.7 pin is configured for digital mode
-   ***********************************************************************/
-  P0MDIN = P0MDIN_B0__DIGITAL | P0MDIN_B1__DIGITAL | P0MDIN_B2__ANALOG
-      | P0MDIN_B3__DIGITAL | P0MDIN_B4__DIGITAL | P0MDIN_B5__DIGITAL
-      | P0MDIN_B6__DIGITAL | P0MDIN_B7__DIGITAL;
   // [P0MDIN - Port 0 Input Mode]$
 
   // $[P0SKIP - Port 0 Skip]
   /***********************************************************************
    - P0.0 pin is skipped by the crossbar
-   - P0.1 pin is skipped by the crossbar
-   - P0.2 pin is skipped by the crossbar
+   - P0.1 pin is not skipped by the crossbar
+   - P0.2 pin is not skipped by the crossbar
    - P0.3 pin is skipped by the crossbar
    - P0.4 pin is not skipped by the crossbar
    - P0.5 pin is not skipped by the crossbar
    - P0.6 pin is skipped by the crossbar
    - P0.7 pin is skipped by the crossbar
    ***********************************************************************/
-  P0SKIP = P0SKIP_B0__SKIPPED | P0SKIP_B1__SKIPPED | P0SKIP_B2__SKIPPED
+  P0SKIP = P0SKIP_B0__SKIPPED | P0SKIP_B1__NOT_SKIPPED | P0SKIP_B2__NOT_SKIPPED
       | P0SKIP_B3__SKIPPED | P0SKIP_B4__NOT_SKIPPED | P0SKIP_B5__NOT_SKIPPED
       | P0SKIP_B6__SKIPPED | P0SKIP_B7__SKIPPED;
   // [P0SKIP - Port 0 Skip]$
@@ -243,13 +231,13 @@ PBCFG_0_enter_DefaultMode_from_RESET (void)
 
   // $[XBR1 - Port I/O Crossbar 1]
   /***********************************************************************
-   - CEX0, CEX1, CEX2, CEX3 routed to Port pins
+   - CEX0, CEX1, CEX2, CEX3, CEX4, CEX5 routed to Port pins
    - ECI unavailable at Port pin
    - T0 unavailable at Port pin
    - T1 unavailable at Port pin
    - T2 unavailable at Port pin
    ***********************************************************************/
-  XBR1 = XBR1_PCA0ME__CEX0_TO_CEX3 | XBR1_ECIE__DISABLED | XBR1_T0E__DISABLED
+  XBR1 = XBR1_PCA0ME__CEX0_TO_CEX5 | XBR1_ECIE__DISABLED | XBR1_T0E__DISABLED
       | XBR1_T1E__DISABLED | XBR1_T2E__DISABLED;
   // [XBR1 - Port I/O Crossbar 1]$
 
@@ -536,26 +524,16 @@ PCACH_0_enter_DefaultMode_from_RESET (void)
   // [PCA0 Settings Save]$
 
   // $[PCA0CPM0 - PCA Channel 0 Capture/Compare Mode]
-  /***********************************************************************
-   - Disable negative edge capture
-   - Disable CCF0 interrupts
-   - Disable match function
-   - 8 to 11-bit PWM selected
-   - Disable positive edge capture
-   - Enable comparator function
-   - Enable PWM function
-   - Disable toggle function
-   ***********************************************************************/
-  PCA0CPM0 = PCA0CPM0_CAPN__DISABLED | PCA0CPM0_ECCF__DISABLED
-      | PCA0CPM0_MAT__DISABLED | PCA0CPM0_PWM16__8_BIT | PCA0CPM0_CAPP__DISABLED
-      | PCA0CPM0_ECOM__ENABLED | PCA0CPM0_PWM__ENABLED | PCA0CPM0_TOG__DISABLED;
   // [PCA0CPM0 - PCA Channel 0 Capture/Compare Mode]$
 
   // $[PCA0CPL0 - PCA Channel 0 Capture Module Low Byte]
   // [PCA0CPL0 - PCA Channel 0 Capture Module Low Byte]$
 
   // $[PCA0CPH0 - PCA Channel 0 Capture Module High Byte]
-  PCA0CPH0 = 0x00;
+  /***********************************************************************
+   - PCA Channel 0 Capture Module High Byte = 0x01
+   ***********************************************************************/
+  PCA0CPH0 = (0x01 << PCA0CPH0_PCA0CPH0__SHIFT);
   // [PCA0CPH0 - PCA Channel 0 Capture Module High Byte]$
 
   // $[Auto-reload]
