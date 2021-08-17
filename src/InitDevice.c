@@ -470,6 +470,14 @@ PCA_0_enter_DefaultMode_from_RESET (void)
   // [PCA Off]$
 
   // $[PCA0MD - PCA Mode]
+  /***********************************************************************
+   - PCA continues to function normally while the system controller is in
+   Idle Mode
+   - Disable the CF interrupt
+   - System clock
+   ***********************************************************************/
+  PCA0MD = PCA0MD_CIDL__NORMAL | PCA0MD_ECF__OVF_INT_DISABLED
+      | PCA0MD_CPS__SYSCLK;
   // [PCA0MD - PCA Mode]$
 
   // $[PCA0CENT - PCA Center Alignment Enable]
@@ -544,10 +552,7 @@ PCACH_0_enter_DefaultMode_from_RESET (void)
   // [PCA0CPL0 - PCA Channel 0 Capture Module Low Byte]$
 
   // $[PCA0CPH0 - PCA Channel 0 Capture Module High Byte]
-  /***********************************************************************
-   - PCA Channel 0 Capture Module High Byte = 0x01
-   ***********************************************************************/
-  PCA0CPH0 = (0x01 << PCA0CPH0_PCA0CPH0__SHIFT);
+  PCA0CPH0 = 0x00;
   // [PCA0CPH0 - PCA Channel 0 Capture Module High Byte]$
 
   // $[Auto-reload]

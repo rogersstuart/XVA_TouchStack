@@ -25,6 +25,8 @@ extern uint16_t ms_counter;
 #define LED_LOW 0xFF
 #define LED_HIGH 0xF2
 
+uint16_t code CV_PARAMS[] = {221, 222, 224, 225, 227, 228, 230, 231};
+
 uint16_t touch_cal[4];
 uint8_t last_result[4];
 uint16_t touch_timer[4];
@@ -37,6 +39,8 @@ uint8_t presets[3];
 
 uint8_t program_num = 0;
 uint8_t function_page = 0;
+
+uint8_t CV_polarity = 0;
 
 float ttb[4];
 
@@ -220,13 +224,26 @@ void setLED_EN(uint8_t idx, bool en)
   }
 }
 
+void resetLEDi(uint8_t idx, bool state, uint8_t val)
+{
+  setLED_EN(idx, state);
+  setLEDLevel(idx, val);
+}
+
+void resetLED()
+{
+  int i;
+  for (i = 0; i < 4; i++)
+    resetLEDi(i, 0, LED_HIGH);
+}
+
 /**
  *
  */
 uint16_t touchTimer(char sensor_index)
 {
   uint16_t timer = 0;
-  uint8_t result = 0, i = 0;
+  uint8_t result = 0;
 
   P0_B7 = 1;      //tx high
   P1 = 0xFF;      //set all rx port pin high
@@ -278,7 +295,7 @@ uint16_t touchTimer(char sensor_index)
 
 void sampleTouchSensors()
 {
-  uint8_t i, k, b;
+  uint8_t i;
 
   for (i = 0; i < 4; i++)
   {
@@ -301,18 +318,37 @@ uint16_t getTouchVal(uint8_t pos)
 float getAnalog(uint8_t s_idx)
 {
   uint16_t s_range, tch_nrm;
+  float t_val, tmp;
 
-  if (lowest_active[s_idx] > highest_active[s_idx])
+  t_val = ttb[s_idx];
+
+  if (lowest_active[s_idx] >= highest_active[s_idx])
     return 0;
 
-  if (getTouchVal(s_idx) <= lowest_active[s_idx])
+  if (t_val <= lowest_active[s_idx])
     return 0;
 
   s_range = highest_active[s_idx] - lowest_active[s_idx];
 
-  tch_nrm = getTouchVal(s_idx) - lowest_active[s_idx];
+  tmp = s_range * 0.1;
 
-  return ((float)tch_nrm) / s_range;
+  if(t_val > highest_active[s_idx]-tmp)
+    t_val = highest_active[s_idx];
+  else
+    if(t_val < lowest_active[s_idx]+tmp)
+      t_val = lowest_active[s_idx];
+
+  tmp = t_val - lowest_active[s_idx];
+
+  tmp /= s_range;
+
+  if(tmp > 1)
+    tmp = 1;
+  else
+    if(tmp < 0)
+      tmp = 0;
+
+  return tmp;
 }
 
 void calibrateTouch()
@@ -334,8 +370,7 @@ void calibrateTouch()
 
 void funcPageLEDAni()
 {
-  uint16_t timer;
-  char i;
+  uint8_t i;
 
   //turn LEDs off
   PCA0CPH2 &= (0xFF ^ (1 << 1));
@@ -347,7 +382,7 @@ void funcPageLEDAni()
   PCA0CPH3 = 0xF2;
   PCA0CPH5 = 0xF2;
 
-  delayMS(250);
+  //delayMS(250);
 
   for (i = 0; i < 4; i++)
   {
@@ -364,7 +399,7 @@ void funcPageLEDAni()
       break;
     }
 
-    delayMS(250);
+    delayMS(100);
   }
 }
 
@@ -428,11 +463,61 @@ uint8_t button4Functions()
 
 void button4ShortPress()
 {
+  uint8_t i;
+
   function_page++;
   if (function_page > 2)
     function_page = 0;
 
   funcPageLEDAni();
+
+  if (function_page == 2)
+  {
+
+    //turn off all the CV inputs
+    for (i = 0; i < 8; i++)
+    {
+      txByte('s');
+      if (CV_PARAMS[i] > 255)
+      {
+        txByte(0xFF);
+        txByte(CV_PARAMS[i] - 0xFF);
+      }
+      else
+      {
+        txByte(CV_PARAMS[i]);
+      }
+      txByte((uint8_t)128);
+    }
+
+    PCA0CPM0 |= (1 << 1);
+    PCA0CPH0 = 127;
+
+    PCA0CPM1 |= (1 << 1);
+    PCA0CPH1 = 127;
+
+    //turn on two select CV options
+    if (CV_polarity)
+    {
+      txByte('s');
+      txByte(228);
+      txByte((uint8_t)0xFF);
+
+      txByte('s');
+      txByte((uint8_t)221);
+      txByte(0xFF);
+    }
+    else
+    {
+      txByte('s');
+      txByte(228);
+      txByte((uint8_t)0);
+
+      txByte('s');
+      txByte((uint8_t)221);
+      txByte(0);
+    }
+  }
 }
 
 /**
@@ -442,6 +527,9 @@ void button4ShortPress()
  */
 void b0F0()
 {
+  if (hold_ctr[0] == 0)
+    resetLEDi(0, 1, LED_HIGH);
+
   if (hold_ctr[0] == 0 || hold_ctr[0] > 2)
   {
 
@@ -461,56 +549,346 @@ void b0F0()
   touch_timer[0] = millis();
 }
 
+/**
+ * Button 2 function page 0
+ *
+ * Program change up
+ */
 void b1F0()
 {
+  if (hold_ctr[1] == 0)
+    resetLEDi(1, 1, LED_HIGH);
+
+  if (hold_ctr[1] == 0 || hold_ctr[1] > 2)
+  {
+
+    if (program_num == 127)
+      program_num = 0;
+    else
+      program_num++;
+
+    txByte('r');
+    txByte(program_num);
+  }
+
+  if (hold_ctr[1] > 200)
+    hold_ctr[1] = 3;
+
+  hold_ctr[1]++;
+  touch_timer[1] = millis();
 }
 
+/**
+ * Button 3 function page 0
+ *
+ * Program change to 0
+ */
 void b2F0()
 {
+  if (hold_ctr[2] == 0)
+  {
+
+    resetLEDi(2, 1, LED_HIGH);
+    program_num = 0;
+    txByte('r');
+    txByte(program_num);
+  }
+  hold_ctr[2]++;
+  touch_timer[2] = millis();
 }
 
-void button1Fuctions()
+void b0F1(bool sp)
+{
+
+  uint8_t i = 0;
+
+  if (hold_ctr[i] == 0)
+    resetLEDi(i, 1, LED_HIGH);
+  else if (hold_ctr[i] == 2)
+    resetLEDi(i, 1, LED_LOW);
+  else if (hold_ctr[i] == 4)
+    resetLEDi(i, 1, LED_HIGH);
+  else if (hold_ctr[i] > 4)
+    resetLEDi(i, 0, LED_HIGH);
+
+  if (sp)
+  {
+    txByte('r');
+    txByte(presets[i]);
+  }
+  else
+  {
+    if (hold_ctr[i] == 4)
+    {
+      presets[i] = program_num;
+    }
+  }
+
+  hold_ctr[i]++;
+  touch_timer[i] = millis();
+}
+void b1F1(bool sp)
+{
+
+  uint8_t i = 1;
+
+  if (hold_ctr[i] == 0)
+    resetLEDi(i, 1, LED_HIGH);
+  else if (hold_ctr[i] == 2)
+    resetLEDi(i, 1, LED_LOW);
+  else if (hold_ctr[i] == 4)
+    resetLEDi(i, 1, LED_HIGH);
+  else if (hold_ctr[i] > 4)
+    resetLEDi(i, 0, LED_HIGH);
+
+  if (sp)
+  {
+    txByte('r');
+    txByte(presets[i]);
+  }
+  else
+  {
+    if (hold_ctr[i] == 4)
+    {
+      presets[i] = program_num;
+    }
+  }
+
+  hold_ctr[i]++;
+  touch_timer[i] = millis();
+}
+void b2F1(bool sp)
+{
+
+  uint8_t i = 2;
+
+  if (hold_ctr[i] == 0)
+    resetLEDi(i, 1, LED_HIGH);
+  else if (hold_ctr[i] == 2)
+    resetLEDi(i, 1, LED_LOW);
+  else if (hold_ctr[i] == 4)
+    resetLEDi(i, 1, LED_HIGH);
+  else if (hold_ctr[i] > 4)
+    resetLEDi(i, 0, LED_HIGH);
+
+  if (sp)
+  {
+    txByte('r');
+    txByte(presets[i]);
+  }
+  else
+  {
+    if (hold_ctr[i] == 4)
+    {
+      presets[i] = program_num;
+    }
+  }
+
+  hold_ctr[i]++;
+  touch_timer[i] = millis();
+}
+
+void b0F2(bool sp)
+{ //set polarity
+
+  if (hold_ctr[0] == 0)
+  {
+    CV_polarity = !CV_polarity;
+
+    resetLEDi(0, 1, LED_HIGH);
+
+    /*
+  PCA0POL ^= (PCA0POL & (~(uint8_t)1));
+  PCA0POL |= CV_polarity;
+
+  PCA0POL ^= (PCA0POL & (~(uint8_t)2));
+  PCA0POL |= (CV_polarity << 1);
+  */
+
+    if (CV_polarity)
+    {
+      txByte('s');
+      txByte(228);
+      txByte((uint8_t)0xFF);
+
+      txByte('s');
+      txByte((uint8_t)221);
+      txByte(0xFF);
+    }
+    else
+    {
+      txByte('s');
+      txByte(228);
+      txByte((uint8_t)0);
+
+      txByte('s');
+      txByte((uint8_t)221);
+      txByte(0);
+    }
+  }
+  else
+    resetLEDi(0, 0, LED_HIGH);
+
+  hold_ctr[0]++;
+  touch_timer[0] = millis();
+}
+
+void b1F2(bool sp)
+{ //cv0
+  uint8_t i = 1, scale_val;
+
+  scale_val = getAnalog(i) * 0xFF;
+  //get_dec_str(scale_val*100);
+
+  if (i == 1)
+    if (scale_val > 0)
+    {
+      if (!((PCA0CPM0 & 2) >> 1))
+      {
+        txByte('s');
+        txByte(228);
+        txByte(CV_polarity ? 0xFF : 0);
+
+        /*
+                       PCA0POL ^= (PCA0POL & (~(uint8_t)1));
+                        PCA0POL |= CV_polarity;
+                        */
+
+        PCA0CPM0 |= (1 << 1);
+      }
+
+      PCA0CPH0 = scale_val;
+      resetLEDi(1, 1, ~(uint8_t)scale_val);
+    }
+    else
+    {
+
+      PCA0CPH0 = 127;
+      txByte('s');
+      txByte(228);
+      txByte((uint8_t)128);
+
+      //PCA0CPM0 &= (0xFF ^ (1 << 1));
+      //P0_B1 = CV_polarity;
+      resetLEDi(1, 0, LED_HIGH);
+    }
+
+  hold_ctr[1]++;
+  touch_timer[1] = millis();
+}
+
+void b2F2(bool sp)
+{ //cv1
+  uint8_t i = 2, scale_val;
+
+  scale_val = getAnalog(i) * 0xFF;
+  //get_dec_str(scale_val*100);
+
+  if (i == 2)
+    if (scale_val > 0)
+    {
+      if (!((PCA0CPM1 & 2) >> 1))
+      {
+
+        txByte('s');
+        txByte(221);
+        txByte(CV_polarity ? 0xFF : 0);
+
+        /*
+                                                         PCA0POL ^= (PCA0POL & (~(uint8_t)2));
+                                          PCA0POL |= (CV_polarity << 1);
+*/
+        PCA0CPM1 |= (1 << 1);
+      }
+
+      PCA0CPH1 = scale_val;
+      resetLEDi(2, 1, ~(uint8_t)scale_val);
+    }
+    else
+    {
+
+      PCA0CPH1 = 127;
+
+      txByte('s');
+      txByte(221);
+      txByte(128);
+      //PCA0CPM1 &= (0xFF ^ (1 << 1));
+      //P0_B2 = CV_polarity;
+      resetLEDi(2, 0, LED_HIGH);
+    }
+
+  hold_ctr[2]++;
+  touch_timer[2] = millis();
+}
+
+void button1Fuctions(bool sp)
 {
 
   if (function_page == 0)
   {
-    b0F0(); //button 0 function page 0
+    b0F0(); //button 1 function page 0
   }
   else if (function_page == 1)
   {
+
+    b0F1(sp);
   }
   else if (function_page == 2)
   {
+    b0F2(sp);
   }
 }
 
-void button2Fuctions()
+void button2Fuctions(bool sp)
 {
 
   if (function_page == 0)
   {
-    b1F0(); //button 0 function page 0
+    b1F0(); //button 2 function page 0
   }
   else if (function_page == 1)
   {
+    b1F1(sp);
   }
   else if (function_page == 2)
   {
+    b1F2(sp);
   }
 }
 
-void button3Fuctions()
+void button3Fuctions(bool sp)
 {
 
   if (function_page == 0)
   {
-    b2F0(); //button 0 function page 0
+    b2F0(); //button 3 function page 0
   }
   else if (function_page == 1)
   {
+    b2F1(sp);
   }
   else if (function_page == 2)
   {
+    b2F2(sp);
+  }
+}
+
+void buttonFunctions(uint8_t button, bool short_press)
+{
+
+  switch (button)
+  {
+  case 0:
+    button1Fuctions(short_press);
+    break;
+  case 1:
+    button2Fuctions(short_press);
+    break;
+  case 2:
+    button3Fuctions(short_press);
+    break;
+  case 3:
+    break;
   }
 }
 
@@ -530,29 +908,11 @@ void SiLabs_Startup(void)
 
 void LED_InitRoutine()
 {
-}
-
-//-----------------------------------------------------------------------------
-// main() Routine
-// ----------------------------------------------------------------------------
-int main(void)
-{
   int i = 0, k = 0;
-  char result[4] = {0, 0, 0, 0};
-  char flags_tmp = 0;
-  uint16_t tmp_tmr = 0;
-  float scale_val = 0;
-
-  petDog();
-
-  // Call hardware initialization routine
-  enter_DefaultMode_from_RESET();
 
   //set the initial led brightness
   for (i = 0; i < 4; i++)
     setLEDLevel(i, LED_LOW);
-
-  resetMsTmr();
 
   //turn the PWM channels on
   for (i = 0; i < 4; i++)
@@ -578,6 +938,27 @@ int main(void)
   //turn the channels off
   for (i = 0; i < 4; i++)
     setLED_EN(i, 0);
+}
+
+//-----------------------------------------------------------------------------
+// main() Routine
+// ----------------------------------------------------------------------------
+int main(void)
+{
+  int i = 0, k = 0;
+  char result[4] = {0, 0, 0, 0};
+  char flags_tmp = 0;
+  //uint16_t tmp_tmr = 0;
+  //float scale_val = 0;
+
+  petDog();
+
+  // Call hardware initialization routine
+  enter_DefaultMode_from_RESET();
+
+  LED_InitRoutine();
+
+  delayMS(250);
 
   funcPageLEDAni();
 
@@ -655,12 +1036,17 @@ int main(void)
         {
           if (i == 0) //button 1
           {
-            button1Fuctions();
+            button1Fuctions(0);
             continue;
           }
           else if (i == 1) //button 2
           {
-            tx_int_flag = false;
+
+            button2Fuctions(0);
+            continue;
+
+            /*
+              tx_int_flag = false;
             SBUF0 = 'r';
             while (!tx_int_flag)
               ;
@@ -675,16 +1061,22 @@ int main(void)
               touch_timer[i] = millis();
               while ((millis() - touch_timer[i]) < 100)
                 ;
+
             }
 
             tx_int_flag = false;
             SBUF0 = program_num;
             while (!tx_int_flag)
               ;
+              */
           }
           else if (i == 2) //button 3
           {
-            tx_int_flag = false;
+            button3Fuctions(0);
+            continue;
+
+            /*
+              tx_int_flag = false;
             SBUF0 = 'w';
             while (!tx_int_flag)
               ;
@@ -692,6 +1084,7 @@ int main(void)
             SBUF0 = program_num;
             while (!tx_int_flag)
               ;
+              */
           }
           else if (i == 3) //button 4
           {
@@ -705,28 +1098,16 @@ int main(void)
           button4ShortPress();
         }
 
+        if (function_page == 1 && hold_ctr[i] < 4)
+        {
+          buttonFunctions(i, 1);
+        }
+
         hold_ctr[i] = 0;
         last_result[i] = result[i];
       }
 
-      switch (i)
-      {
-      case 0:
-        PCA0CPM2 ^= (1 << 1);
-        PCA0CPH2 = 0xF2;
-        break;
-      case 1:
-        PCA0CPM3 ^= (1 << 1);
-        PCA0CPH3 = 0xF2;
-        break;
-      case 2:
-        PCA0CPM5 ^= (1 << 1);
-        PCA0CPH5 = 0xF2;
-        break;
-      case 3:
-        PCA0CPM4 ^= (1 << 1);
-        PCA0CPH4 = 0xF2;
-      };
+      resetLED();
     }
 
     // $[Generated Run-time code]
