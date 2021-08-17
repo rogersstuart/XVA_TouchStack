@@ -147,9 +147,14 @@ uint16_t millis()
 
 void delayMS(uint16_t to_delay)
 {
+  uint8_t i;
   uint16_t timer = millis();
   while (millis() - timer < to_delay)
-    petDog();
+    {
+      for(i = 0; i < 0xFF; i++)
+        petDog();
+    }
+
 }
 
 /**
@@ -188,38 +193,36 @@ void setLED_EN(uint8_t idx, bool en)
 {
   if (en)
   {
-
     switch (idx)
     {
     case 0:
-      PCA0CPM2 |= ((1 << 1));
+      PCA0CPM2 |= (2);
       break;
     case 1:
-      PCA0CPM3 |= ((1 << 1));
+      PCA0CPM3 |= (2);
       break;
     case 2:
-      PCA0CPM5 |= ((1 << 1));
+      PCA0CPM5 |= (2);
       break;
     case 3:
-      PCA0CPM4 |= ((1 << 1));
+      PCA0CPM4 |= (2);
     };
   }
   else
   {
-
     switch (idx)
     {
     case 0:
-      PCA0CPM2 &= (~(1 << 1));
+      PCA0CPM2 &= (~2);
       break;
     case 1:
-      PCA0CPM3 &= (~(1 << 1));
+      PCA0CPM3 &= (~2);
       break;
     case 2:
-      PCA0CPM5 &= (~(1 << 1));
+      PCA0CPM5 &= (~2);
       break;
     case 3:
-      PCA0CPM4 &= (~(1 << 1));
+      PCA0CPM4 &= (~2);
     };
   }
 }
@@ -301,7 +304,7 @@ void sampleTouchSensors()
   {
     b_touch_timer[i] = touchTimer(i);
 
-    ttb[i] = ttb[i] * 0.99 + b_touch_timer[i] * 0.01;
+    ttb[i] = ttb[i] * 0.97 + b_touch_timer[i] * 0.03;
 
     if (ttb[i] > touch_cal[i] && ttb[i] < lowest_active[i])
       lowest_active[i] = ttb[i];
@@ -335,7 +338,7 @@ float getAnalog(uint8_t s_idx)
   if(t_val > highest_active[s_idx]-tmp)
     t_val = highest_active[s_idx];
   else
-    if(t_val < lowest_active[s_idx]+tmp)
+    if(t_val < lowest_active[s_idx]+(tmp))
       t_val = lowest_active[s_idx];
 
   tmp = t_val - lowest_active[s_idx];
@@ -364,43 +367,47 @@ void calibrateTouch()
 
     touch_cal[i] /= 10;
 
-    touch_cal[i] += touch_cal[i];
+    //touch_cal[i] += touch_cal[i];
   }
+
+  k= 0;
+  for(i = 0; i < 4; i++)
+    if(touch_cal[i] > k)
+      k = touch_cal[i];
+
+  k+=k/3;
+
+  for(i = 0; i < 4; i++)
+    touch_cal[i] = k;
 }
 
 void funcPageLEDAni()
 {
   uint8_t i;
 
-  //turn LEDs off
-  PCA0CPH2 &= (0xFF ^ (1 << 1));
-  PCA0CPH3 &= (0xFF ^ (1 << 1));
-  PCA0CPH5 &= (0xFF ^ (1 << 1));
-
-  //set the led brightness
-  PCA0CPH2 = 0xF2;
-  PCA0CPH3 = 0xF2;
-  PCA0CPH5 = 0xF2;
+  resetLED();
 
   //delayMS(250);
 
-  for (i = 0; i < 4; i++)
+  for (i = 0; i < 3; i++)
   {
     switch (function_page)
     {
     case 0:
-      PCA0CPM2 ^= (1 << 1);
+      PCA0CPM2 ^= 2;
       break;
     case 1:
-      PCA0CPM3 ^= (1 << 1);
+      PCA0CPM3 ^= 2;
       break;
     case 2:
-      PCA0CPM5 ^= (1 << 1);
+      PCA0CPM5 ^= 2;
       break;
     }
 
     delayMS(100);
   }
+
+  resetLEDi(function_page, 0, LED_HIGH);
 }
 
 uint8_t button4Functions()
@@ -488,6 +495,7 @@ void button4ShortPress()
         txByte(CV_PARAMS[i]);
       }
       txByte((uint8_t)128);
+
     }
 
     PCA0CPM0 |= (1 << 1);
@@ -506,6 +514,7 @@ void button4ShortPress()
       txByte('s');
       txByte((uint8_t)221);
       txByte(0xFF);
+
     }
     else
     {
@@ -516,6 +525,7 @@ void button4ShortPress()
       txByte('s');
       txByte((uint8_t)221);
       txByte(0);
+
     }
   }
 }
@@ -711,9 +721,11 @@ void b0F2(bool sp)
       txByte(228);
       txByte((uint8_t)0xFF);
 
+
       txByte('s');
       txByte((uint8_t)221);
       txByte(0xFF);
+
     }
     else
     {
@@ -724,10 +736,15 @@ void b0F2(bool sp)
       txByte('s');
       txByte((uint8_t)221);
       txByte(0);
+
     }
   }
   else
     resetLEDi(0, 0, LED_HIGH);
+
+
+  txByte('w');
+        txByte(program_num);
 
   hold_ctr[0]++;
   touch_timer[0] = millis();
@@ -741,40 +758,38 @@ void b1F2(bool sp)
   //get_dec_str(scale_val*100);
 
   if (i == 1)
-    if (scale_val > 0)
+    if (ttb[i] > touch_cal[i])
     {
-      if (!((PCA0CPM0 & 2) >> 1))
-      {
-        txByte('s');
-        txByte(228);
-        txByte(CV_polarity ? 0xFF : 0);
 
-        /*
-                       PCA0POL ^= (PCA0POL & (~(uint8_t)1));
-                        PCA0POL |= CV_polarity;
-                        */
-
-        PCA0CPM0 |= (1 << 1);
-      }
 
       PCA0CPH0 = scale_val;
-      resetLEDi(1, 1, ~(uint8_t)scale_val);
+      resetLEDi(1, 1, ~((uint8_t)scale_val/4));
     }
     else
     {
 
-      PCA0CPH0 = 127;
-      txByte('s');
-      txByte(228);
-      txByte((uint8_t)128);
+      if(PCA0CPH0 != 127)
+        {
+
+        PCA0CPH0 = 127;
+
+      //delayMS(1);
+
+      //txByte('s');
+      //txByte(221);
+      //txByte((uint8_t)128);
 
       //PCA0CPM0 &= (0xFF ^ (1 << 1));
       //P0_B1 = CV_polarity;
       resetLEDi(1, 0, LED_HIGH);
+        }
     }
 
   hold_ctr[1]++;
-  touch_timer[1] = millis();
+
+  if(hold_ctr[i] > 200)
+    hold_ctr[i] = 2;
+  //touch_timer[1] = millis();
 }
 
 void b2F2(bool sp)
@@ -785,40 +800,36 @@ void b2F2(bool sp)
   //get_dec_str(scale_val*100);
 
   if (i == 2)
-    if (scale_val > 0)
+    if (ttb[i] > touch_cal[i])
     {
-      if (!((PCA0CPM1 & 2) >> 1))
-      {
 
-        txByte('s');
-        txByte(221);
-        txByte(CV_polarity ? 0xFF : 0);
-
-        /*
-                                                         PCA0POL ^= (PCA0POL & (~(uint8_t)2));
-                                          PCA0POL |= (CV_polarity << 1);
-*/
-        PCA0CPM1 |= (1 << 1);
-      }
 
       PCA0CPH1 = scale_val;
-      resetLEDi(2, 1, ~(uint8_t)scale_val);
+      resetLEDi(2, 1, ~((uint8_t)scale_val/4));
     }
     else
     {
 
+          if(PCA0CPH1 != 127)
+            {
       PCA0CPH1 = 127;
 
-      txByte('s');
-      txByte(221);
-      txByte(128);
+      //delayMS(1);
+
+      //txByte('s');
+      //txByte(228);
+      //txByte(128);
       //PCA0CPM1 &= (0xFF ^ (1 << 1));
       //P0_B2 = CV_polarity;
       resetLEDi(2, 0, LED_HIGH);
+            }
     }
 
   hold_ctr[2]++;
-  touch_timer[2] = millis();
+
+  if(hold_ctr[i] > 200)
+      hold_ctr[i] = 2;
+  //touch_timer[2] = millis();
 }
 
 void button1Fuctions(bool sp)
@@ -1020,11 +1031,29 @@ int main(void)
 
     //gather touch results
     sampleTouchSensors();
+
+
     for (i = 0; i < 4; i++)
       result[i] = (b_touch_timer[i] > touch_cal[i]); //1 touched, 0 no touch
 
     for (i = 0; i < 4; i++)
     {
+
+        if(function_page == 2 && (i == 1 || i == 2))
+          {
+            if(i == 1)
+              {
+                button2Fuctions(0);
+                            continue;
+              }
+            else
+              if(i == 2)
+                {
+                  button3Fuctions(0);
+                              continue;
+                }
+
+          }
 
       if (((result[i] == last_result[i]) && hold_ctr[i] == 0) || (millis() - touch_timer[i]) < 250)
         continue;

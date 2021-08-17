@@ -470,14 +470,6 @@ PCA_0_enter_DefaultMode_from_RESET (void)
   // [PCA Off]$
 
   // $[PCA0MD - PCA Mode]
-  /***********************************************************************
-   - PCA continues to function normally while the system controller is in
-   Idle Mode
-   - Disable the CF interrupt
-   - System clock
-   ***********************************************************************/
-  PCA0MD = PCA0MD_CIDL__NORMAL | PCA0MD_ECF__OVF_INT_DISABLED
-      | PCA0MD_CPS__SYSCLK;
   // [PCA0MD - PCA Mode]$
 
   // $[PCA0CENT - PCA Center Alignment Enable]
@@ -532,20 +524,6 @@ PCACH_0_enter_DefaultMode_from_RESET (void)
   // [PCA0 Settings Save]$
 
   // $[PCA0CPM0 - PCA Channel 0 Capture/Compare Mode]
-  /***********************************************************************
-   - Disable negative edge capture
-   - Disable CCF0 interrupts
-   - Enable match function
-   - 8 to 11-bit PWM selected
-   - Disable positive edge capture
-   - Disable comparator function
-   - Disable PWM function
-   - Disable toggle function
-   ***********************************************************************/
-  PCA0CPM0 = PCA0CPM0_CAPN__DISABLED | PCA0CPM0_ECCF__DISABLED
-      | PCA0CPM0_MAT__ENABLED | PCA0CPM0_PWM16__8_BIT | PCA0CPM0_CAPP__DISABLED
-      | PCA0CPM0_ECOM__DISABLED | PCA0CPM0_PWM__DISABLED
-      | PCA0CPM0_TOG__DISABLED;
   // [PCA0CPM0 - PCA Channel 0 Capture/Compare Mode]$
 
   // $[PCA0CPL0 - PCA Channel 0 Capture Module Low Byte]
