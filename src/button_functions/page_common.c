@@ -31,10 +31,10 @@ void presetControlFunc(uint8_t preset_bank, uint8_t idx, uint8_t sp){
   presetHoldSequence(idx);
 
     if (sp)
-      activatePreset(&active_config.presets[preset_bank*idx]);
+      activatePreset(&active_config.presets[preset_bank*3+idx]);
     else
       if (hold_ctr[idx] == 4)
-        configurePreset(&active_config.presets[preset_bank*idx]);
+        configurePreset(&active_config.presets[preset_bank*3+idx]);
 
     hold_ctr[idx]++;
     touch_timer[idx] = millis();

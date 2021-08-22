@@ -145,8 +145,6 @@ int main(void)
 
   init_synth_mode();
 
-  LED_InitRoutine(); //fade up
-
   while (1)
   {
     petDog();
