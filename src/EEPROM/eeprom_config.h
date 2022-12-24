@@ -28,15 +28,15 @@
  *  grows up from EE_BASE_ADDRESS and is FL_PAGE_SIZE*FL_PAGES bytes large.
  *  Ensure that the last page is not defined as the lock byte page.
  */
-#define FL_PAGES        2
+#define FL_PAGES        10
 
 /**
  * @def EE_BASE_ADDR
  * @brief This should point to the memory location where the EEPROM
  *  storage area begins.  This must coincide with the start of a Flash page.
  */
-//#define EE_BASE_ADDR    (LOCK_PAGE - FL_PAGE_SIZE * FL_PAGES)
- #define EE_BASE_ADDR    0x3C00
+#define EE_BASE_ADDR    (LOCK_PAGE - FL_PAGE_SIZE * FL_PAGES)
+ //#define EE_BASE_ADDR    0x3C00
 
 /**
  * @def EE_SIZE

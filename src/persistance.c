@@ -11,7 +11,9 @@
 #include "EEPROM/eeprom_config.h"
 #include "EEPROM/eeprom.h"
 
-SYS_CONFIG active_config;
+volatile SYS_CONFIG active_config;
+
+bool power_state = POWER_OFF;
 
 /*
 SYS_CONFIG* getConfig(){
@@ -28,7 +30,7 @@ void write_cfg(){
   eeprom_write_byte(0, BRINGUP_CODE);
   for(; i < size; i++)
     {
-      petDog();
+      resetWDT();
       eeprom_write_byte(i+1, *(((uint8_t*)&active_config)+i));
     }
 }
@@ -44,7 +46,7 @@ bool read_cfg(){
   else
       for(i = 0; i < size; i++)
         {
-          petDog();
+          resetWDT();
         eeprom_read_byte(i+1, (((uint8_t*)&active_config)+i));
         }
 

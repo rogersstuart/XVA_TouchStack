@@ -32,13 +32,25 @@
 
 #define SHORT_PRESS 1
 
-#define XVA_MODE 0
-#define XFM_MODE 1
 
-#define BRINGUP_CODE 0xF2
+
+#define BRINGUP_CODE 0xB6
 
 extern unsigned char last_result[4];
-extern unsigned short touch_timer[4];
+extern unsigned long touch_timer[4];
 extern unsigned char hold_ctr[4];
+
+typedef void(*BUTTON_FUNC)(unsigned char f);
+
+extern BUTTON_FUNC * code B_FUNC_PAGES[];
+
+void resetState(unsigned char force);
+
+void softPowerCycle();
+void init_synth_mode();
+void forceLCDRefresh();
+void refresh_lcd();
+void setSynthEN (volatile bool);
+void setAmpEN (bool);
 
 #endif /* MAIN_H_ */

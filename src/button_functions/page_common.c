@@ -13,7 +13,7 @@
 #include "synth_interface/synth_common.h"
 #include "utility.h"
 
-uint8_t unit_number = 0;
+//uint8_t unit_number = 0;
 
 void presetHoldSequence(uint8_t idx){
   if (hold_ctr[idx] == 0)
@@ -31,10 +31,10 @@ void presetControlFunc(uint8_t preset_bank, uint8_t idx, uint8_t sp){
   presetHoldSequence(idx);
 
     if (sp)
-      activatePreset(&active_config.presets[preset_bank*3+idx]);
+      activatePreset(&active_config.persistant_cfg.presets[preset_bank*3+idx]);
     else
       if (hold_ctr[idx] == 4)
-        configurePreset(&active_config.presets[preset_bank*3+idx]);
+        configurePreset(&active_config.persistant_cfg.presets[preset_bank*3+idx]);
 
     hold_ctr[idx]++;
     touch_timer[idx] = millis();

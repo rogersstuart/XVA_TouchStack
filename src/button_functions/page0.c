@@ -56,7 +56,7 @@ void b0F0(uint8_t sp)
       else
         {
           //xfm mode
-          rotateVar(unit_number ? &active_config.active_preset.base : &active_config.active_preset.extended, true);
+          rotateVar(active_config.unit_number == 0 ? &(active_config.active_preset.base) : &(active_config.active_preset.extended), true);
           activatePreset(&active_config.active_preset);
         }
 
@@ -93,7 +93,7 @@ void b1F0(uint8_t sp)
       else
       {
         //xfm mode
-        rotateVar(unit_number ? &active_config.active_preset.base : &active_config.active_preset.extended, false);
+        rotateVar(active_config.unit_number == 0 ? &(active_config.active_preset.base) : &(active_config.active_preset.extended), false);
         activatePreset(&active_config.active_preset);
       }
   }
@@ -112,7 +112,11 @@ void b1F0(uint8_t sp)
  */
 void b2F0(uint8_t sp)
 {
-  if (hold_ctr[BUTTON_3] == 0)
+  //if (hold_ctr[BUTTON_3] == 0)
+  if(active_config.system_mode == XFM_MODE)
+    presetHoldSequence(BUTTON_3);
+
+  if(sp)
   {
     resetLEDi(2, 1, LED_HIGH);
 
@@ -121,10 +125,10 @@ void b2F0(uint8_t sp)
 
     if(active_config.system_mode == XFM_MODE)
     {
-        if(unit_number)
-          active_config.active_preset.base = 0;
-        else
+        if(active_config.unit_number)
           active_config.active_preset.extended = 0;
+        else
+          active_config.active_preset.base = 0;
 
         activatePreset(&active_config.active_preset);
     }
@@ -132,6 +136,19 @@ void b2F0(uint8_t sp)
       set_active_program(active_config.active_preset.base);
 
   }
+
+    if (hold_ctr[BUTTON_3] == 5)
+    {
+        if(active_config.system_mode == XFM_MODE)
+          {
+            active_config.unit_number = !active_config.unit_number;
+                active_config.function_page = 0;
+                //write_cfg();
+                //funcPageLEDAni(0);
+                activatePreset(&active_config.active_preset);
+          }
+    }
+
   hold_ctr[BUTTON_3]++;
   touch_timer[BUTTON_3] = millis();
 }

@@ -13,12 +13,16 @@
 #include "stdbool.h"
 
 void get_dec_str (uint16_t val);
-void petDog();
+void resetWDT();
 void resetMsTmr();
-void delayMS(uint16_t to_delay);
-void txByte(uint8_t byte);
-short rxByte(uint16_t timeout);
+void delayMS(uint32_t to_delay);
+void U1txByte(uint8_t byte);
+volatile char U1rxByte(volatile uint32_t timeout);
 void setInterruptEN(bool en);
-uint16_t millis();
+volatile uint32_t millis();
+void capitalizeString(char * string);
+void UlToStr(volatile char *s, unsigned int bin, volatile unsigned char n);
+
+void U1flush(void);
 
 #endif /* UTILITY_H_ */

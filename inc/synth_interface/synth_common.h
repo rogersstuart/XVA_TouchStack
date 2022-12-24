@@ -11,8 +11,13 @@
 #include "stdint.h"
 #include "persistance.h"
 
+
+
+extern uint8_t title_changed;
+
 void activatePreset(PRESET * p);
 void configurePreset(PRESET * p);
 void set_active_program(uint8_t prog_num);
+void getProgName();
 
 #endif

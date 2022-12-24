@@ -8,13 +8,13 @@ void setLEDLevel(uint8_t idx, uint8_t level)
   {
   case 0:
 
-    PCA0CPH2 = level;break;
-  case 1:
     PCA0CPH3 = level;break;
+  case 1:
+    PCA0CPH2 = level;break;
   case 2:
-    PCA0CPH5 = level;break;
+    PCA0CPH1 = level;break;
   case 3:
-    PCA0CPH4 = level;
+    PCA0CPH0 = level;
   };
 }
 
@@ -25,13 +25,13 @@ void setLED_EN(uint8_t idx, bool en)
     switch (idx)
     {
     case 0:
-      PCA0CPM2 |= (2);break;
-    case 1:
       PCA0CPM3 |= (2);break;
+    case 1:
+      PCA0CPM2 |= (2);break;
     case 2:
-      PCA0CPM5 |= (2);break;
+      PCA0CPM1 |= (2);break;
     case 3:
-      PCA0CPM4 |= (2);
+      PCA0CPM0 |= (2);
     };
   }
   else
@@ -39,13 +39,13 @@ void setLED_EN(uint8_t idx, bool en)
     switch (idx)
     {
     case 0:
-      PCA0CPM2 &= (~2);break;
-    case 1:
       PCA0CPM3 &= (~2);break;
+    case 1:
+      PCA0CPM2 &= (~2);break;
     case 2:
-      PCA0CPM5 &= (~2);break;
+      PCA0CPM1 &= (~2);break;
     case 3:
-      PCA0CPM4 &= (~2);
+      PCA0CPM0 &= (~2);
     };
   }
 }
@@ -76,16 +76,16 @@ void funcPageLEDAni(uint8_t function_page)
     switch (function_page)
     {
     case 0:
-      PCA0CPM2 ^= 2;
-      break;
-    case 1:
       PCA0CPM3 ^= 2;
       break;
+    case 1:
+      PCA0CPM2 ^= 2;
+      break;
     case 2:
-      PCA0CPM5 ^= 2;
+      PCA0CPM1 ^= 2;
       break;
     case 3:
-          PCA0CPM4 ^= 2;
+          PCA0CPM0 ^= 2;
           break;
     }
 
@@ -99,7 +99,7 @@ void LED_InitRoutine()
 {
   uint8_t i = 0, k = 0;
 
-  petDog();
+  resetWDT();
 
   //set the initial led brightness
   for (i = 0; i < 4; i++)
@@ -112,7 +112,7 @@ void LED_InitRoutine()
   //do a little startup brightness thing
   for (i = 0xFF; i >= 0xE0; i--)
   {
-      petDog();
+      resetWDT();
 
       for (k = 0; k < 4; k++)
       setLEDLevel(k, i);
@@ -128,6 +128,6 @@ void LED_InitRoutine()
   for (i = 0; i < 4; i++)
     setLED_EN(i, 0);
 
-  petDog();
+  resetWDT();
 }
 

@@ -13,7 +13,7 @@
 extern uint16_t b_touch_timer[4];
 extern float ttb[4];
 
-uint16_t touchTimer(char sensor_index);
+void touchTimer();
 void sampleTouchSensors();
 uint16_t getTouchVal(uint8_t pos);
 void calibrateTouch();
