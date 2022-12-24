@@ -99,8 +99,6 @@ void calibrateTouch()
 {
   int i = 0, k = 0;
 
-  resetWDT();
-
   //set init values
   touchTimer();
   for (i = 0; i < 4; i++)
@@ -108,20 +106,12 @@ void calibrateTouch()
 
   //integrate 10 samples
   for (k = 1; k < 10; k++)
-    {
-      touchTimer();
-  for (i = 0; i < 4; i++)
   {
+    touchTimer();
 
+    for (i = 0; i < 4; i++)
       active_config.persistant_cfg.touch_cal[i] += b_touch_timer[i];
-
-    //active_config.touch_cal[i] /= 10;
-
-    //touch_cal[i] += touch_cal[i];
-
-    resetWDT();
   }
-    }
 
   for (i = 0; i < 4; i++)
     active_config.persistant_cfg.touch_cal[i] /= 10;
@@ -131,7 +121,7 @@ void calibrateTouch()
     if(active_config.persistant_cfg.touch_cal[i] > k)
       k = active_config.persistant_cfg.touch_cal[i];
 
-  k+=k/2;
+  k+=k;
 
   for(i = 0; i < 4; i++)
     active_config.persistant_cfg.touch_cal[i] = k;

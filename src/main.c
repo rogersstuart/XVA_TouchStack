@@ -231,7 +231,10 @@ void powerOnInit(){
 
   if (!read_cfg ())
   {
-    calibrateTouch ();
+    //active_config = {0};
+
+
+      calibrateTouch ();
     write_cfg ();
   }
 

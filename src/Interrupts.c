@@ -153,7 +153,7 @@ SI_INTERRUPT (ADC0EOC_ISR, ADC0EOC_IRQn)
 
 
 
-    if(active_cal->cv0[0] < active_cal->cv0[1])
+    if(active_cal->cv0[0] < active_cal->cv0[1] && (active_cal->scalar[0] == active_cal->scalar[0]))
     {
     //cv0 scaling active
       calc = active_cal->scalar[0];
@@ -165,11 +165,11 @@ SI_INTERRUPT (ADC0EOC_ISR, ADC0EOC_IRQn)
 
       buf1 -= active_cal->cv0[0];
 
-      calc = ((active_cal->scalar[0]) * (float)buf1) / 3.3;
+      calc = ((active_cal->scalar[0]) * (float)buf1) / 1.5;
     }
     else
     {
-      calc = ((float)buf1/(float)3.3);
+      calc = ((float)buf1/(float)1.5);
     }
 
     dac_val.u16 = calc;
@@ -179,13 +179,13 @@ SI_INTERRUPT (ADC0EOC_ISR, ADC0EOC_IRQn)
     //            SFRPAGE = PG4_PAGE;
 
     //counter.u16 = convt;
-    DAC0L = dac_val.u8[LSB];
-    DAC0H = dac_val.u8[MSB];
+    DAC2L = dac_val.u8[LSB];
+    DAC2H = dac_val.u8[MSB];
 
     //    SFRPAGE = SFRPAGE_save;
 
 
-    if(active_cal->cv1[0] < active_cal->cv1[1])
+    if(active_cal->cv1[0] < active_cal->cv1[1] && (active_cal->scalar[1] == active_cal->scalar[1]))
     {
         //cv1 scaling active
         calc = active_cal->scalar[1];
@@ -197,18 +197,18 @@ SI_INTERRUPT (ADC0EOC_ISR, ADC0EOC_IRQn)
 
         buf2 -= active_cal->cv1[0];
 
-        calc = ((active_cal->scalar[1]) * (float)buf2) / 3.3;
+        calc = ((active_cal->scalar[1]) * (float)buf2) / 1.5;
     }
     else
     {
-        calc = ((float)buf2/(float)3.3);
+        calc = ((float)buf2/(float)1.5);
 
     }
 
     dac_val.u16 = calc;
 
-    DAC2L = dac_val.u8[LSB];
-          DAC2H = dac_val.u8[MSB];
+    DAC0L = dac_val.u8[LSB];
+          DAC0H = dac_val.u8[MSB];
 
 
 

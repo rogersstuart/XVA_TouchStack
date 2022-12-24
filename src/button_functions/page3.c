@@ -20,7 +20,7 @@
 #include <math.h>
 #include "touch_keys.h"
 
-void b0F3(uint8_t sp) //switch mode
+void b0F3(uint8_t sp) //upload default tuning and bank data after long press
 {
   float calc2;
 
@@ -32,7 +32,7 @@ void b0F3(uint8_t sp) //switch mode
       setSynthEN(POWER_OFF);
       delayMS(1000);
 
-      //this need to be broken down and put into a method. there are way too many occurances
+      //this need to be broken down and put into a method. there are way too many occurrences
       req_adc_vals = true;
       while (req_adc_vals);
       calc2 = adc_buffer[0];
@@ -64,9 +64,9 @@ void b0F3(uint8_t sp) //switch mode
 
       tuning_test();
 
-            softPowerCycle();
-            delayMS(2000);
-            softPowerCycle();
+      softPowerCycle();
+      delayMS(2000);
+      softPowerCycle();
 
       decompress_test();
 
@@ -85,34 +85,187 @@ void b0F3(uint8_t sp) //switch mode
   touch_timer[0] = millis();
 }
 
-void b1F3(uint8_t sp) //switch unit number
+void b1F3(uint8_t sp) //edit program menu
 {
-  presetHoldSequence(BUTTON_2);
-  //if(hold_ctr[BUTTON_2] == 0){
-  //  resetLEDi(BUTTON_2, ON, LED_HIGH);
-  //  hold_ctr[BUTTON_2]++;
-  //}
-/*
-  if(0)//if(sp)
-  {
+  volatile uint8_t last_resulti[4];
+    volatile uint32_t touch_timeri[4];
+    volatile uint8_t hold_ctri[4] = {0,0,0,0};
+    uint8_t resulti[4] = {0, 0, 0, 0};
+    uint16_t i = 0;
 
-      active_config.unit_number = !active_config.unit_number;
-    active_config.function_page = 0;
-    write_cfg();
-    funcPageLEDAni(0);
-    init_synth_mode();
-  }
-*/
+    uint8_t digits[3] = {0,0,0};
+    uint16_t param_number = 0;
+
+    uint8_t text_buf[20];
+
+    float calc;
+    CV_CAL * active_cal = &active_config.persistant_cfg.cv_cal;
+
+    bool locki = true;
+    bool modei = true;
+
+  presetHoldSequence(BUTTON_2);
+
   if (hold_ctr[BUTTON_2] == 4)
     {
-      //randomize
-      randomizeProgram();
-      //activatePreset(&active_config.active_preset);
-      init_synth_mode();
+      //calibration submenu
+      fillScreen(ST7735_BLACK);
+      drawtext(0, 0, "LIVE PARAM", ST7735_WHITE, ST7735_BLACK, 2);
+
+
+      //buttons 3,2,1 edit the digit. button 4 short press enables and disables editing. button 4 long press exits.
+      for(i = 0; i < 4; i++)
+        touch_timeri[i] = millis();
+      sampleTouchSensors();
+      while(1)
+      {
+          req_adc_vals = true;
+
+          drawtext(0, 1, locki ? "LOCK  " : "UNLOCK", locki ? ST7735_BLUE : ST7735_RED, ST7735_BLACK, 2);
+
+          sampleTouchSensors();
+
+                    for (i = 0; i < 4; i++)
+                                  resulti[i] = (b_touch_timer[i] > active_config.persistant_cfg.touch_cal[i]); //1 touched, 0 no touch
+
+                                for (i = 0; i < 4; i++)
+                                {
+                                  if (((resulti[i] == last_resulti[i]) && hold_ctri[i] == 0) || (uint32_t)((int32_t)millis() - touch_timeri[i]) < 250)
+                                    continue;
+                                  else
+                                  {
+                                    touch_timeri[i] = millis();
+
+                                    if (resulti[i]) //button is touched
+                                    {
+                                      //if(i < BUTTON_4)
+                                      //  B_FUNC_PAGES[i][active_config.function_page](0);
+                                      //else
+                                      //  button4Functions();
+
+                                        if(i == BUTTON_4)
+                                          {
+
+                                            if (hold_ctri[BUTTON_4]++ == 4)
+                                              {
+                                                forceLCDRefresh();
+                                                button4ShortPress ();
+                                              return;
+                                              }
+                                          }
+                                        else
+                                          if(i == BUTTON_3)
+                                            {
+                                              digits[0]++;
+                                              if(digits[0] > 5)
+                                                digits[0] = 0;
+
+                                              locki = true;
+                                            }
+                                          else
+                                            if(i == BUTTON_2)
+                                              {
+                                                digits[1]++;
+                                                if(digits[1] > 9)
+                                                  digits[1] = 0;
+
+                                                locki = true;
+                                              }
+                                            else
+                                              if(i == BUTTON_1)
+                                                {
+                                                  if (hold_ctri[BUTTON_1] == 4)
+                                                    {
+                                                        modei = !modei;
+                                                  continue;
+                                                    }
+
+                                                  digits[2]++;
+                                                  if(digits[2] > 9)
+                                                    digits[2] = 0;
+
+                                                  locki = true;
+                                                }
+
+                                      continue;
+                                    }
+
+                                    //button has been released
+                                    if (i == BUTTON_4 && hold_ctri[BUTTON_4] > 0)
+                                      {
+                                      locki = !locki;
+                                      //continue;
+                                      }
+
+
+
+                                    //  if (i < BUTTON_4 && hold_ctr[i] < SHORT_PRESS_MAX_HOLD_COUNT)
+                                    //    B_FUNC_PAGES[i][active_config.function_page](SHORT_PRESS);
+
+                                    hold_ctri[i] = 0;
+                                    last_resulti[i] = resulti[i];
+                                  }
+
+                                  resetLED();
+                                }
+
+
+
+                                param_number = digits[0] * 100 + digits[1] * 10 + digits[2];
+
+                                text_buf[1] = '\0';
+                                text_buf[0] = digits[0]+0x30;
+                                drawtext(140, 0, text_buf, ST7735_WHITE, ST7735_BLACK, 3);
+                                text_buf[0] = digits[1]+0x30;
+                                drawtext(140, 1, text_buf, ST7735_WHITE, ST7735_BLACK, 3);
+                                text_buf[0] = digits[2]+0x30;
+                                drawtext(140, 2, text_buf, ST7735_WHITE, ST7735_BLACK, 3);
+
+                                while(req_adc_vals);
+
+                                if(active_cal->cv0[0] < active_cal->cv0[1])
+                                    {
+                                    //cv0 scaling active
+                                      calc = active_cal->scalar[0];
+
+                                      if(adc_buffer[1] > active_cal->cv0[1])
+                                        adc_buffer[1] = active_cal->cv0[1];
+                                      if(adc_buffer[1] < active_cal->cv0[0])
+                                        adc_buffer[1] = active_cal->cv0[0];
+
+                                      adc_buffer[1] -= active_cal->cv0[0];
+
+                                      calc = ((active_cal->scalar[0]) * (float)adc_buffer[1]);
+                                    }
+                                    else
+                                    {
+                                      calc = ((float)adc_buffer[1]);
+                                    }
+
+                                calc /= 4096.0;
+
+                                sprintf(text_buf,"CV: %.2f   ", calc);
+                                drawtext(0, 3, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
+
+                                calc *= modei ? 255.0 : 128.0;
+
+                                sprintf(text_buf,"val: %u    ", (int)calc);
+                                drawtext(0, 4, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
+
+                                if(!locki)
+                                  {
+                                U1txByte('s');
+                                U1txByte(param_number >= 255 ? 255 : param_number);
+                                if(param_number >= 255)
+                                  U1txByte(param_number-256);
+                                U1txByte((int)calc);
+                                  }
+      } //// while end
     }
 
   hold_ctr[BUTTON_2]++;
   touch_timer[BUTTON_2] = millis();
+
 }
 
 void b2F3(uint8_t sp) //touch cal
@@ -135,7 +288,7 @@ void b2F3(uint8_t sp) //touch cal
         {
           //display vars, unit select
           req_adc_vals = true;
-          while(req_adc_vals);
+
           sprintf(print_buf,"CV0: %.2f", ((float)adc_buffer[1]/4096.0)*3.3);
           drawtext(0, 1, print_buf, ST7735_WHITE, ST7735_BLACK, 2);
 
