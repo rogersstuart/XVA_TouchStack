@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include "touch_keys.h"
+#include "value_lookup.h"
+
 
 void b0F3(uint8_t sp) //upload default tuning and bank data after long press
 {
@@ -87,22 +89,26 @@ void b0F3(uint8_t sp) //upload default tuning and bank data after long press
 
 void b1F3(uint8_t sp) //edit program menu
 {
-  volatile uint8_t last_resulti[4];
-    volatile uint32_t touch_timeri[4];
-    volatile uint8_t hold_ctri[4] = {0,0,0,0};
-    uint8_t resulti[4] = {0, 0, 0, 0};
-    uint16_t i = 0;
+   uint8_t  last_resulti[4];
+     uint32_t  touch_timeri[4];
+     uint8_t  hold_ctri[4] = {0,0,0,0};
+    uint8_t  resulti[4] = {0, 0, 0, 0};
+    uint16_t data i = 0;
 
-    uint8_t digits[3] = {0,0,0};
-    uint16_t param_number = 0;
+    uint8_t data digits[3] = {0,0,0};
+    uint16_t data param_number = 0;
+    uint8_t * text_pointer;
+    uint8_t text_buf[24];
 
-    uint8_t text_buf[20];
+    float data calc;
+    uint8_t data calc_res;
 
-    float calc;
-    CV_CAL * active_cal = &active_config.persistant_cfg.cv_cal;
+    CV_CAL * data active_cal = &active_config.persistant_cfg.cv_cal;
 
-    bool locki = true;
-    bool modei = true;
+    bool data locki = true;
+    bool data modei = true;
+
+    uint32_t data lcd_refresh_timer = millis();
 
   presetHoldSequence(BUTTON_2);
 
@@ -122,6 +128,16 @@ void b1F3(uint8_t sp) //edit program menu
           req_adc_vals = true;
 
           drawtext(0, 1, locki ? "LOCK  " : "UNLOCK", locki ? ST7735_BLUE : ST7735_RED, ST7735_BLACK, 2);
+
+          //drawtext(0, 4, active_config.system_mode == XVA_MODE ? xva_lookup[param_number].name : xfm_lookup[param_number].name, ST7735_WHITE, ST7735_BLACK, 1);
+          text_pointer = active_config.system_mode == XVA_MODE ? xva_lookup[param_number].name : xfm_lookup[param_number].name;
+          memset(text_buf, ' ', 24);
+          strcpy(text_buf, text_pointer);
+          for(i = 0; i < 24; i++)
+            if(text_buf[i] == '\0')
+              text_buf[i] = ' ';
+          text_buf[23] = '\0';
+          drawtext(0, 4,text_buf ,ST7735_WHITE, ST7735_BLACK, 1);
 
           sampleTouchSensors();
 
@@ -210,6 +226,11 @@ void b1F3(uint8_t sp) //edit program menu
                                 }
 
 
+                                #define MAX_LCD_REFRESH 1/20
+                                if ((uint32_t) ((int32_t) millis () - lcd_refresh_timer) >= MAX_LCD_REFRESH)
+                                  {
+
+
 
                                 param_number = digits[0] * 100 + digits[1] * 10 + digits[2];
 
@@ -244,21 +265,54 @@ void b1F3(uint8_t sp) //edit program menu
 
                                 calc /= 4096.0;
 
-                                sprintf(text_buf,"CV: %.2f   ", calc);
+                                sprintf(text_buf,"CV:%.1f%%  ", calc*100);
                                 drawtext(0, 3, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
 
-                                calc *= modei ? 255.0 : 128.0;
-
-                                sprintf(text_buf,"val: %u    ", (int)calc);
-                                drawtext(0, 4, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
+                                calc *= active_config.system_mode == XVA_MODE ? xva_lookup[param_number].maximum : xfm_lookup[param_number].maximum;
+                                calc_res = (calc+0.5);
 
                                 if(!locki)
+                                {
+                                  U1txByte('s');
+                                  U1txByte(param_number >= 255 ? 255 : param_number);
+                                  if(param_number >= 255)
+                                    U1txByte(param_number-256);
+                                  U1txByte(calc_res);
+                                }
+                                else
                                   {
-                                U1txByte('s');
-                                U1txByte(param_number >= 255 ? 255 : param_number);
-                                if(param_number >= 255)
-                                  U1txByte(param_number-256);
-                                U1txByte((int)calc);
+                                    uint8_t sample_a, sample_b;
+
+                                    do
+                                      {
+                                    U1rxByte(0);
+                                    U1rxByte(0);
+                                    U1txByte('g');
+                                    U1txByte(param_number >= 255 ? 255 : param_number);
+                                    if(param_number >= 255)
+                                      U1txByte(param_number-256);
+                                    sample_a = U1rxByte(1000);
+
+                                    U1txByte('g');
+                                                                        U1txByte(param_number >= 255 ? 255 : param_number);
+                                                                        if(param_number >= 255)
+                                                                          U1txByte(param_number-256);
+                                                                        sample_b = (uint8_t)U1rxByte(1000);
+                                      }
+                                    while(sample_a != sample_b);
+
+                                    calc_res = sample_a;
+
+
+                                  }
+
+
+                                sprintf(text_buf,"val:%u    ", (int)calc_res);
+                                drawtext(0, 4, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
+
+
+
+                                lcd_refresh_timer = millis();
                                   }
       } //// while end
     }

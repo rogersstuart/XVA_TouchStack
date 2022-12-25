@@ -165,11 +165,11 @@ SI_INTERRUPT (ADC0EOC_ISR, ADC0EOC_IRQn)
 
       buf1 -= active_cal->cv0[0];
 
-      calc = ((active_cal->scalar[0]) * (float)buf1) / 1.5;
+      calc = ((active_cal->scalar[0]) * (float)buf1) / 1.65;
     }
     else
     {
-      calc = ((float)buf1/(float)1.5);
+      calc = ((float)buf1/(float)1.65);
     }
 
     dac_val.u16 = calc;
@@ -197,11 +197,11 @@ SI_INTERRUPT (ADC0EOC_ISR, ADC0EOC_IRQn)
 
         buf2 -= active_cal->cv1[0];
 
-        calc = ((active_cal->scalar[1]) * (float)buf2) / 1.5;
+        calc = ((active_cal->scalar[1]) * (float)buf2) / 1.65;
     }
     else
     {
-        calc = ((float)buf2/(float)1.5);
+        calc = ((float)buf2/(float)1.65);
 
     }
 

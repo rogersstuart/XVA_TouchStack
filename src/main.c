@@ -263,7 +263,7 @@ void powerOnInit(){
 
 void softPowerCycle(){
 
-  float calc2;
+  float data calc2;
 
 
   if(power_state)
@@ -293,7 +293,7 @@ void softPowerCycle(){
         bool rst_flag = false;
         char attempt_ctr = 0;
 
-        while(!rst_flag && attempt_ctr < 10)
+        while(!rst_flag && attempt_ctr < 2)
           {
 
             uint32_t localtmr = millis();
@@ -455,81 +455,69 @@ void refresh_lcd ()
   //ADC0_startConversion();
 }
 
-main (void)
-{
-  uint16_t k = 0;
-
+void touchFunctions(){
   uint8_t result[4] = { 0, 0, 0, 0 };
 
+  sampleTouchSensors ();
+
+       for (i = 0; i < 4; i++)
+         result[i] = (b_touch_timer[i] > active_config.persistant_cfg.touch_cal[i]); //1 touched, 0 no touch
+
+       for (i = 0; i < 4; i++)
+         {
+           if (((result[i] == last_result[i]) && hold_ctr[i] == 0)
+               || (uint32_t) ((int32_t) millis () - touch_timer[i]) < 250)
+             continue;
+           else
+             {
+               touch_timer[i] = millis ();
+
+               if (result[i]) //button is touched
+                 {
+                   if (i < BUTTON_4)
+                     B_FUNC_PAGES[i][active_config.function_page] (0);
+                   else
+                     button4Functions ();
+
+                   //last_result[i] = result[i];
+
+                   continue;
+                 }
+
+               if (i == BUTTON_4 && hold_ctr[BUTTON_4] < 3)
+                 button4ShortPress ();
+
+               if (i < BUTTON_4 && hold_ctr[i] < SHORT_PRESS_MAX_HOLD_COUNT)
+                 B_FUNC_PAGES[i][active_config.function_page] (SHORT_PRESS);
+
+               hold_ctr[i] = 0;
+               last_result[i] = result[i];
+             }
+
+           resetLED ();
+         }
+}
+
+main (void){
   SYS_CONFIG cfg = { 0 };
   active_config = cfg;
-
-  i = 0;
 
   // Call hardware initialization routine
   enter_DefaultMode_from_RESET ();
 
-
-
   powerOnInit();
 
   //init_mempool();
-  //decompress_test();
-  //tuning_test();
 
   timer = 0;
   conversion_timer = millis ();
   lcd_refresh_timer = 0;
 
-  while(true)
-    {
-
-      resetWDT ();
-
-      sampleTouchSensors ();
-
-      for (i = 0; i < 4; i++)
-        result[i] = (b_touch_timer[i] > active_config.persistant_cfg.touch_cal[i]); //1 touched, 0 no touch
-
-      for (i = 0; i < 4; i++)
-        {
-          if (((result[i] == last_result[i]) && hold_ctr[i] == 0)
-              || (uint32_t) ((int32_t) millis () - touch_timer[i]) < 250)
-            continue;
-          else
-            {
-              touch_timer[i] = millis ();
-
-              if (result[i]) //button is touched
-                {
-                  if (i < BUTTON_4)
-                    B_FUNC_PAGES[i][active_config.function_page] (0);
-                  else
-                    button4Functions ();
-
-                  //last_result[i] = result[i];
-
-                  continue;
-                }
-
-              if (i == BUTTON_4 && hold_ctr[BUTTON_4] < 3)
-                button4ShortPress ();
-
-              if (i < BUTTON_4 && hold_ctr[i] < SHORT_PRESS_MAX_HOLD_COUNT)
-                B_FUNC_PAGES[i][active_config.function_page] (SHORT_PRESS);
-
-              hold_ctr[i] = 0;
-              last_result[i] = result[i];
-            }
-
-          resetLED ();
-        }
-
-      refresh_lcd ();
-
+  while(true){
+      touchFunctions();
+    refresh_lcd ();
 // $[Generated Run-time code]
 // [Generated Run-time code]$
-
-    }
+   }
 }
 
