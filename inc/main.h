@@ -34,7 +34,7 @@
 
 
 
-#define BRINGUP_CODE 0xB7
+#define BRINGUP_CODE 0xB8
 
 extern unsigned char last_result[4];
 extern unsigned long touch_timer[4];

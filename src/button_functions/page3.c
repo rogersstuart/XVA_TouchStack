@@ -265,11 +265,11 @@ void b1F3(uint8_t sp) //edit program menu
 
                                 calc /= 4096.0;
 
-                                sprintf(text_buf,"CV:%.1f%%  ", calc*100);
-                                drawtext(0, 3, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
-
                                 calc *= active_config.system_mode == XVA_MODE ? xva_lookup[param_number].maximum : xfm_lookup[param_number].maximum;
                                 calc_res = (calc+0.5);
+
+                                sprintf(text_buf,"CV:%u  ", (int)calc_res);
+                                drawtext(0, 3, text_buf, ST7735_WHITE, ST7735_BLACK, 2);
 
                                 if(!locki)
                                 {
